@@ -1,0 +1,10 @@
+[submodule "cfspopcon"]
+	path = cfspopcon
+	url = https://github.com/cfs-energy/cfspopcon.git
+[submodule "OpenFUSIONToolkit"]
+	path = OpenFUSIONToolkit
+	url = https://github.com/hansec/OpenFUSIONToolkit.git
+[submodule "GPEC"]
+	path = GPEC
+	url = https://github.com/StuartBenjamin/GPEC.git
+	branch = equilibrium_edge
