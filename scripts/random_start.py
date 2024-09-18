@@ -20,9 +20,9 @@ import matplotlib.pyplot as plt
 from omfit_classes.utils_fusion import sauter_bootstrap, Hmode_profiles
 from pathlib import Path
 
-tokamaker_python_path = "/Users/sbenjamin/Desktop/TEARING_WIDGET/OFT_build/install_release"
-if tokamaker_python_path is not None:
-     sys.path.append(os.path.join(tokamaker_python_path,'python'))
+tokamaker_python_path = "/Users/sbenjamin/Desktop/TEARING_WIDGET/OFT_build/install_release/python"
+os.chdir(tokamaker_python_path)
+import OpenFUSIONToolkit
 from OpenFUSIONToolkit.TokaMaker import TokaMaker, solve_with_bootstrap,basic_dynamo_w_bootstrap
 from OpenFUSIONToolkit.TokaMaker.meshing import gs_Domain
 from OpenFUSIONToolkit.TokaMaker.util import create_isoflux, read_eqdsk, eval_green, create_power_flux_fun
