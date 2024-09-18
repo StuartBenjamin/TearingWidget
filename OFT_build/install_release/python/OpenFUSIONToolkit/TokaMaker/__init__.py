@@ -1,7 +1,3 @@
-'''! Python interface for TokaMaker Grad-Shafranov functionality
-
-@authors Chris Hansen
-@date May 2023
-@ingroup doxy_oft_python
-'''
-from ._core import TokaMaker, tokamaker_default_settings, solve_with_bootstrap, basic_dynamo_w_bootstrap
+version https://git-lfs.github.com/spec/v1
+oid sha256:a751b35363a90826f9f467ca3602db811d206950c623805108ef691be19739f0
+size 236
