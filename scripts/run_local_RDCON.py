@@ -270,7 +270,7 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
         psiedge=1.0,
         psi_search_range=0.0,
         qlow=0,
-        qhigh=1e3,1
+        qhigh=1e3,
         sing_start=0,
         bin_euler='f',
         bin_eq_2d='f',
@@ -279,13 +279,13 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
         psilow=1e-4,
         **kwargs)
     os.chdir(working_dir)
-    dcon_run_surf = subprocess.run(working_dir+"/dcon",shell=True)
-    if dcon_run_surf.returncode!=0: #quick exit if this basic scan fails...
+    dcon_run_surf = subprocess.call(working_dir+'/dcon')
+    if dcon_run_surf!=0: #quick exit if this basic scan fails...
         print("subprocess misbehaving")
         surf_ran=False
         #return False, nones...
         equil_dat_xr=prof_dat_xr=edge_dat_xr=gse_dat_xr=MRE_xr=None
-        return False,False,None,None,None
+        return False,False,None#,None,None
     #reading dcon profile data, equilibrium data
     prof_dat_xr = pd.read_csv(working_dir+'/prof_dat.csv', dtype={'ipsis': 'int'}).to_xarray().set_index(index="ipsis").rename({'index': 'ipsis'})#, dtype={'ipsis': 'int'})
     equil_dat_xr = pd.read_csv(working_dir+'/equil_dat.csv', dtype={'mer_pass': 'int'}).to_xarray().squeeze(drop=True)#, dtype={'mer_pass': 'int'})
@@ -308,8 +308,8 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
 
     #stab_metadata__=None
     MRE_combined_vec=[] #vector of things that will have m,n behaviour
-    DCON_vec=[]
-    DeltaPrimes_vec=[]
+    #DCON_vec=[]
+    #DeltaPrimes_vec=[]
     #DeltaPrime
 
     dcon_nzeros=[]
@@ -352,14 +352,14 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                         psilow=1e-4,
                         **kwargs)
             os.chdir(working_dir)
-            dcon_run = subprocess.run(working_dir+"/dcon",shell=True)
-            if dcon_run.returncode==0: 
+            dcon_run = subprocess.call(working_dir+'/dcon')
+            if dcon_run==0: 
                 ns_dcon_ran.append(i)
                 DCON_data_Xr = pd.read_csv(working_dir+'/dcon_dat.csv', dtype={'n': 'int'}).to_xarray().set_coords(names=["n"]).set_xindex(coord_names=["n"]).drop_indexes(coord_names=["index"]).reset_coords(names=["index"],drop=True)
                 MRE_data_Xr = pd.read_csv(working_dir+'/MRE_dat.csv',dtype={'m': 'int', 'n': 'int'}).to_xarray().drop_vars(names=["n"]).set_index(index="m").rename({'index': 'm'})
                 #MRE_data_Xr = MRE_data_Xr.assign(dcon_nzero=DCON_data_Xr.dcon_nzero.values[0],dW_total=DCON_data_Xr.dW_total.values[0])
-                #dcon_nzeros.append(DCON_data_Xr.dcon_nzero.values[0])
-                #dW_totals.append(DCON_data_Xr.dW_total.values[0])
+                dcon_nzeros.append(DCON_data_Xr.dcon_nzero.values[0])
+                dW_totals.append(DCON_data_Xr.dW_total.values[0])
 
                 #FIRST RUN SPECIFIC STUFF:
                 psilim=DCON_data_Xr.psilim.values[0]
@@ -405,11 +405,11 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                             eq_type=eq_type,
                             **kwargs)
                     os.chdir(working_dir)
-                    rdcon_run = subprocess.run(working_dir+"/rdcon",shell=True)
-                    if rdcon_run.returncode==0:
+                    rdcon_run = subprocess.call(working_dir+'/rdcon')
+                    if rdcon_run==0:
                         ns_rdcon_ran.append(i)
                         DeltaPrimes_Xr = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime.csv',dtype={'m': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
-                        #MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
+                        MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
         else: #now just running rdcon on its own
             write_rdcon_inputs(working_dir,eq_filename,
                     nn=i,
@@ -435,49 +435,48 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                     eq_type=eq_type,
                     **kwargs)
             os.chdir(working_dir)
-            rdcon_run = subprocess.run(working_dir+"/rdcon",shell=True)
-            if rdcon_run.returncode==0:
+            rdcon_run = subprocess.call(working_dir+'/rdcon')
+            if rdcon_run==0:
                 ns_dcon_ran.append(i)
                 DCON_data_Xr = pd.read_csv(working_dir+'/dcon_dat.csv', dtype={'n': 'int'}).to_xarray().set_coords(names=["n"]).set_xindex(coord_names=["n"]).drop_indexes(coord_names=["index"]).reset_coords(names=["index"],drop=True)
                 MRE_data_Xr = pd.read_csv(working_dir+'/MRE_dat.csv',dtype={'m': 'int', 'n': 'int'}).to_xarray().drop_vars(names=["n"]).set_index(index="m").rename({'index': 'm'})
                 #MRE_data_Xr = MRE_data_Xr.assign(dcon_nzero=DCON_data_Xr.dcon_nzero.values[0],dW_total=DCON_data_Xr.dW_total.values[0])
-                #dcon_nzeros.append(DCON_data_Xr.dcon_nzero.values[0])
-                #dW_totals.append(DCON_data_Xr.dW_total.values[0])
+                dcon_nzeros.append(DCON_data_Xr.dcon_nzero.values[0])
+                dW_totals.append(DCON_data_Xr.dW_total.values[0])
 
                 dcon_pass=(DCON_data_Xr.dcon_nzero.values[0]==0)
                 free_pass=(DCON_data_Xr.dW_total.values[0]>0)
                 if dcon_pass and free_pass:
                     ns_rdcon_ran.append(i)
                     DeltaPrimes_Xr = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime.csv',dtype={'m': 'int', 'n': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
-                    #MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
+                    MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
             
-        if ns_dcon_ran[-1]==i:
+        if len(ns_dcon_ran)>0 and ns_dcon_ran[-1]==i:
             MRE_combined_vec.append(MRE_data_Xr.assign(n=i).set_coords('n'))
-            DCON_vec.append(DCON_data_Xr)
-        if ns_rdcon_ran[-1]==i:
-            DeltaPrimes_vec.append(DeltaPrimes_Xr.assign(n=i).set_coords('n'))
+            #DCON_vec.append(DCON_data_Xr)
+        #if ns_rdcon_ran[-1]==i:
+        #    DeltaPrimes_vec.append(DeltaPrimes_Xr.assign(n=i).set_coords('n'))
 
     if len(MRE_combined_vec)>0:
         MRE_xr=xr.concat(MRE_combined_vec,dim="n")
-        ideal_xr=xr.merge(DCON_vec,compat="no_conflicts")
-    else:
-        ideal_xr=None
-    if len(DeltaPrimes_vec)>0:
-        DP_xr=xr.concat(DeltaPrimes_vec,dim="n")
-    else:
-        DP_xr=None
+        #ideal_xr=xr.merge(DCON_vec,compat="no_conflicts")
+    #else:
+        #ideal_xr=None
+    #if len(DeltaPrimes_vec)>0:
+    #    DP_xr=xr.concat(DeltaPrimes_vec,dim="n")
+    #else:
+    #    DP_xr=None
 
     #Combining all info into a single xarray:
     equil_dat_xr=equil_dat_xr.assign(ns_dcon_ran=ns_dcon_ran,ns_rdcon_ran=ns_rdcon_ran)
-    #equil_dat_xr=equil_dat_xr.assign(dcon_nzero=equil_dat_xr["ns_dcon_ran"]*0+dcon_nzeros,dW_total=equil_dat_xr["ns_dcon_ran"]*0+dW_totals)
-    #^doesn't work
+    equil_dat_xr=equil_dat_xr.assign(dcon_nzero=equil_dat_xr["ns_dcon_ran"]*0+dcon_nzeros,dW_total=equil_dat_xr["ns_dcon_ran"]*0+dW_totals)
     equil_dat_xr=equil_dat_xr.merge(prof_dat_xr)
     equil_dat_xr=equil_dat_xr.merge(edge_dat_xr)
     equil_dat_xr=equil_dat_xr.merge(gse_dat_xr)
     if len(MRE_combined_vec)>0:
         equil_dat_xr=equil_dat_xr.merge(MRE_xr)
 
-    return (surf_ran and len(ns_dcon_ran)>0),(surf_ran and len(ns_rdcon_ran)>0),equil_dat_xr,ideal_xr,DP_xr,DCON_vec,DeltaPrimes_vec
+    return (surf_ran and len(ns_dcon_ran)>0),(surf_ran and len(ns_rdcon_ran)>0),equil_dat_xr #,ideal_xr,DP_xr,DCON_vec,DeltaPrimes_vec
 
 def write_equil_in(working_dir,eq_filename,write_equil_filename='/equil.in',
         #EQUIL_CONTROL

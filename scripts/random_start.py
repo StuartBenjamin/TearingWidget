@@ -893,23 +893,30 @@ def run_dcon_on_equilibria(out_path,dcon_executable,rdcon_executable,n=0,cases_i
         equil_names = os.listdir(i[0])
         if len(equil_names)>0:
             for j in equil_names:
-                if not (os.path.isfile(i[1]+"/"+j+"_dcon_xr") or os.path.isfile(i[1]+"/"+j+"_dcon_xrF")): # and os.path.isfile(i+"/"+j):
+                if not (os.path.isfile(i[1]+"/"+j+"_dcon_xr") or os.path.isfile(i[1]+"/"+j+"_dcon_xrF")):
                     #equil_directory.append([i+"/"+j,i]) #filename, directory
                     print("running dcon on equilibrium file: ",i[0]+"/"+j)
-                    dcon_ran,rdcon_ran,MRE_xr,ideal_xr,DP_xr=run_DCON_on_equilibrium2(i[0]+"/"+j,
-                            working_dir=working_dir,dcon_executable=dcon_executable,
-                            rdcon_executable=rdcon_executable,
-                            **kwargs)
-                    if dcon_ran:
-                        MRE_xr.to_netcdf(path=i[1]+"/"+j+"_dcon_xr",engine="scipy")
-                        ideal_xr.to_netcdf(path=i[1]+"/"+j+"_ideal_xr",engine="scipy")
-                    if rdcon_ran:
-                        DP_xr.to_netcdf(path=i[1]+"/"+j+"_DP_xr",engine="scipy")
-                    else:
+                    try:
+                        dcon_ran,rdcon_ran,MRE_xr=run_DCON_on_equilibrium2(i[0]+"/"+j,
+                                working_dir=working_dir,dcon_executable=dcon_executable,
+                                rdcon_executable=rdcon_executable,
+                                **kwargs)
+                        if dcon_ran:
+                            MRE_xr.to_netcdf(path=i[1]+"/"+j+"_dcon_xr",engine="scipy")
+                            #ideal_xr.to_netcdf(path=i[1]+"/"+j+"_ideal_xr",engine="scipy")
+                        #if rdcon_ran:
+                        #    DP_xr.to_netcdf(path=i[1]+"/"+j+"_DP_xr",engine="scipy")
+                        else:
+                            f__0=open(i[1]+"/"+j+"_dcon_xrF", 'w')
+                            f__0.write('dcon_ran,rdcon_ran\n')
+                            f__0.write(f'{str(dcon_ran)},{str(rdcon_ran)}\n')
+                            f__0.close()
+                    except:
                         f__0=open(i[1]+"/"+j+"_dcon_xrF", 'w')
                         f__0.write('dcon_ran,rdcon_ran\n')
-                        f__0.write(f'{str(dcon_ran)},{str(rdcon_ran)}\n')
+                        f__0.write(f'{str(-123454321)},{str(-123454321)}\n')
                         f__0.close()
+
 
     #for i in equil_directory:
     print("dcon analysis up to date on ",out_path)
@@ -1158,6 +1165,9 @@ def _gen_n_successful_cases(n,out_path="dset",return_total=True,save=True,save_e
             ).to_netcdf(path=out_path+f"/tokamak_xr",engine="scipy")
         return total_dataset
     return 
+
+#def gen_surface_terms(bigxr):
+#    
 
 """ Old logic:
 mygscopy, err_flag, J_BS, J_tot, avg_BJbs = run_tokamaker_case_on_point(MC_case_datasetout[1].sel(point_type='min_pressure'), mygs, 
