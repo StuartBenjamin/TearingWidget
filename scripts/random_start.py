@@ -1632,6 +1632,17 @@ def calc_plasma_current_from_marginally_stable_current_fraction(
     return plasma_current_fraction * inverse_aspect_ratio * (1.0 + elongation_psi95**2.0) * np.pi * minor_radius * magnetic_field_on_axis / (mu_0 * 2.0)
 
 #tested
+def calc_marginally_stable_current_fraction_from_plasma_current(
+    plasma_current,
+    magnetic_field_on_axis ,
+    major_radius,
+    inverse_aspect_ratio, 
+    elongation_psi95):
+
+    minor_radius=inverse_aspect_ratio*major_radius
+    return plasma_current/(inverse_aspect_ratio * (1.0 + elongation_psi95**2.0) * np.pi * minor_radius * magnetic_field_on_axis / (mu_0 * 2.0))
+
+#tested
 def field_on_axis(major_radius,inverse_aspect_ratio,magnetic_field_on_coil=23,magnet_to_plasma_distance=0.9,inboard_space=0.6): 
     minor_radius=inverse_aspect_ratio*major_radius
     coil_radius=major_radius-minor_radius-magnet_to_plasma_distance
