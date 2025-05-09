@@ -232,8 +232,8 @@ def run_DCON_on_equilibrium(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,w
     return (surf_ran and len(ns_dcon_ran)>0),(surf_ran and len(ns_rdcon_ran)>0),equil_dat_xr
 
 #THIS IS THE ONE I'M GOING TO USE
-def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,working_dir='',dcon_executable_dir='',rdcon_executable_dir='',
-                                eq_type="""'efit_tokamaker'""",grid_type_diagnose="""'ldp'""",mtheta=1024,mpsi=512,mpsi_diagnose=1024,psi_search_range=0.02,psihigh=0.9999,nmin=1,nmax=4,rdcon_nlim=100,**kwargs):
+def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,working_dir='',dcon_executable_dir='',rdcon_executable_dir='',run_merscan=True,
+                                eq_type="""'efit_tokamaker'""",grid_type_diagnose="""'ldp'""",mtheta=1024,mpsi=512,mpsi_diagnose=1024,psi_search_range=0.05,psihigh=0.9999,nmin=1,nmax=4,rdcon_nlim=100,special_debug=False,**kwargs):
     if len(working_dir)>0:
         os.chdir(working_dir)
 
@@ -255,9 +255,9 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
     write_dcon_inputs(working_dir,eq_filename,
         nn=1,
         mpsi=256,
-        etol=1e-10,
+        etol=1e-9,
         mtheta=512,
-        psihigh=0.995,
+        psihigh=0.995,#0.99983,
         gse_err_logtol=1, #inactive
         bal_flag='f',
         mat_flag='f',
@@ -279,6 +279,7 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
         **kwargs)
     dcon_run_surf = subprocess.run(working_dir+"/dcon")
     if dcon_run_surf.returncode!=0: #quick exit if this basic scan fails...
+        print("""%%%%%%%%%%%%%%%%%%%%%%%%dcon run failed%%%%%%%%%%%%%%%%%%%%%%%%%""")
         surf_ran=False
         #return False, nones...
         equil_dat_xr=prof_dat_xr=edge_dat_xr=gse_dat_xr=MRE_xr=None
@@ -308,6 +309,8 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
 
     dcon_nzeros=[]
     dW_totals=[]
+    dW_plasmas=[]
+    dW_vacuums=[]
 
     for i in range(nmin,nmax+1):
         if not first_case_has_ran:
@@ -354,6 +357,8 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                 #MRE_data_Xr = MRE_data_Xr.assign(dcon_nzero=DCON_data_Xr.dcon_nzero.values[0],dW_total=DCON_data_Xr.dW_total.values[0])
                 dcon_nzeros.append(DCON_data_Xr.dcon_nzero.values[0])
                 dW_totals.append(DCON_data_Xr.dW_total.values[0])
+                dW_plasmas.append(DCON_data_Xr.dW_plasma.values[0])
+                dW_vacuums.append(DCON_data_Xr.dW_vacuum.values[0])
 
                 #FIRST RUN SPECIFIC STUFF:
                 psilim=DCON_data_Xr.psilim.values[0]
@@ -403,6 +408,24 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                         ns_rdcon_ran.append(i)
                         print('merging Deltaprime data')
                         DeltaPrimes_Xr = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime.csv',dtype={'m': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
+                        print(DeltaPrimes_Xr.Re_DeltaPrime.values)
+                        if special_debug:
+                            #MRE_data_Xr.to_csv("MRE_data_Xr_Emergency")
+                            #DeltaPrimes_Xr.to_csv("DeltaPrimes_Xr_Emergency")
+                            equil_dat_xr=equil_dat_xr.assign(ns_dcon_ran=ns_dcon_ran,ns_rdcon_ran=ns_rdcon_ran)
+                            equil_dat_xr=equil_dat_xr.assign(dcon_nzero=equil_dat_xr["ns_dcon_ran"]*0+dcon_nzeros,dW_total=equil_dat_xr["ns_dcon_ran"]*0+dW_totals)
+                            equil_dat_xr=equil_dat_xr.assign(dW_plasma=equil_dat_xr["ns_dcon_ran"]*0+dW_plasmas,dW_vacuum=equil_dat_xr["ns_dcon_ran"]*0+dW_vacuums)
+                            if run_merscan:
+                                equil_dat_xr=equil_dat_xr.merge(prof_dat_xr)
+                            equil_dat_xr=equil_dat_xr.merge(edge_dat_xr)
+                            equil_dat_xr=equil_dat_xr.merge(gse_dat_xr)
+                            try:
+                                equil_dat_xr.to_csv("equil_dat_xr_Emergency")
+                                MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
+                                MRE_xr=xr.concat(MRE_data_Xr,dim="n")
+                                equil_dat_xr=equil_dat_xr.merge(MRE_xr)
+                            except:
+                                return MRE_data_Xr,DeltaPrimes_Xr,equil_dat_xr
                         MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
         else: #now just running rdcon on its own
             write_rdcon_inputs(working_dir,eq_filename,
@@ -437,6 +460,8 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                 #MRE_data_Xr = MRE_data_Xr.assign(dcon_nzero=DCON_data_Xr.dcon_nzero.values[0],dW_total=DCON_data_Xr.dW_total.values[0])
                 dcon_nzeros.append(DCON_data_Xr.dcon_nzero.values[0])
                 dW_totals.append(DCON_data_Xr.dW_total.values[0])
+                dW_plasmas.append(DCON_data_Xr.dW_plasma.values[0])
+                dW_vacuums.append(DCON_data_Xr.dW_vacuum.values[0])
 
                 dcon_pass=(DCON_data_Xr.dcon_nzero.values[0]==0)
                 free_pass=(DCON_data_Xr.dW_total.values[0]>0)
@@ -452,7 +477,9 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
     #Combining all info into a single xarray:
     equil_dat_xr=equil_dat_xr.assign(ns_dcon_ran=ns_dcon_ran,ns_rdcon_ran=ns_rdcon_ran)
     equil_dat_xr=equil_dat_xr.assign(dcon_nzero=equil_dat_xr["ns_dcon_ran"]*0+dcon_nzeros,dW_total=equil_dat_xr["ns_dcon_ran"]*0+dW_totals)
-    equil_dat_xr=equil_dat_xr.merge(prof_dat_xr)
+    equil_dat_xr=equil_dat_xr.assign(dW_plasma=equil_dat_xr["ns_dcon_ran"]*0+dW_plasmas,dW_vacuum=equil_dat_xr["ns_dcon_ran"]*0+dW_vacuums)
+    if run_merscan:
+        equil_dat_xr=equil_dat_xr.merge(prof_dat_xr)
     equil_dat_xr=equil_dat_xr.merge(edge_dat_xr)
     equil_dat_xr=equil_dat_xr.merge(gse_dat_xr)
     equil_dat_xr=equil_dat_xr.merge(MRE_xr)
