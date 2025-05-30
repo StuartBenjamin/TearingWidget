@@ -84,18 +84,38 @@ def neo_terms_on_psifacs2_local(dconxr,dcon_mcind,tok_xr,valid_check=False):
     
     #Converting key terms to psifac splines:
     Te_Kev_on_psifacs=local_tok_xr.electron_temp_profile.interp(dim_0=interp_dim_rho_vals, method="cubic").values#.pint.to(ureg.keV).values
+    Ti_Kev_on_psifacs=local_tok_xr.ion_temp_profile.interp(dim_0=interp_dim_rho_vals, method="cubic").values#.pint.to(ureg.keV).values
     #cfspopcon default saves them as KeV
     #Sanity check incase they're in eV:
     if Te_Kev_on_psifacs[0]>1000:
         Te_Kev_on_psifacs=Te_Kev_on_psifacs/1000
+    if Ti_Kev_on_psifacs[0]>1000:
+        Ti_Kev_on_psifacs=Ti_Kev_on_psifacs/1000
 
     #   Wc terms:
     chi_perp=local_tok_xr.elongation_psi95[0].values*local_tok_xr.minor_radius.values**2/(6*local_tok_xr.energy_confinement_time.values) #Units m^2/s, comes from Fitz 1995
     dconxr=dconxr.assign(chi_perp_no_ne=chi_perp)
     e=1.60217663e-19
     me=9.1091e-31
-    temp_e=(Te_Kev_on_psifacs/1e3)*e #eV*e=joules
+    temp_e=(Te_Kev_on_psifacs*1e3)*e #eV*e=joules
+    temp_i=(Ti_Kev_on_psifacs*1e3)*e #eV*e=joules
     v_te=np.sqrt(2*temp_e/me) #sqrt(joules/kg)=v, see Fitzpatrick equ 1.71
+    mi=local_tok_xr.average_ion_mass[0].values*1.66054e-27 #default units are in amu
+    v_ti=np.sqrt(2*temp_i/mi) #sqrt(joules/kg)=v, see Fitzpatrick equ 1.71
+    replica_data_array=dconxr.qs[0].copy()
+    replica_data_array2=dconxr.qs[0].copy()
+    replica_data_array3=dconxr.qs[0].copy()
+    replica_data_array4=dconxr.qs[0].copy()
+    assert dconxr.qs.ipsis.values[0]==0
+    for i in dconxr.qs.ipsis.values:
+        replica_data_array[i]=v_te[i]
+        replica_data_array2[i]=v_ti[i]
+        replica_data_array3[i]=Te_Kev_on_psifacs[i]
+        replica_data_array4[i]=Ti_Kev_on_psifacs[i]
+    dconxr=dconxr.assign(v_te_s=0.0*dconxr['qs']+replica_data_array)
+    dconxr=dconxr.assign(v_ti_s=0.0*dconxr['qs']+replica_data_array2)
+    dconxr=dconxr.assign(Te_Kev_s=0.0*dconxr['qs']+replica_data_array3)
+    dconxr=dconxr.assign(Ti_Kev_s=0.0*dconxr['qs']+replica_data_array4)
     one_on_v_te=1.0/v_te
     #lambda_parallel=n*2*(psi)*(q1/qs)*sqrt(w_psinorm)*(sqrt(kappa)*<a>)/R0
     psis=dconxr.psifacs[0].values
@@ -260,6 +280,7 @@ def neo_terms_on_psifacs2_local(dconxr,dcon_mcind,tok_xr,valid_check=False):
     """
     return dconxr
 
+#Get poloidal beta, need gyroradii... I suppose
 def neo_terms_on_psifacs2b_local(dconxr,dcon_mcind,tok_xr,valid_check=False):
     local_tok_xr=tok_xr
 
@@ -323,12 +344,18 @@ def neo_terms_on_psifacs2b_local(dconxr,dcon_mcind,tok_xr,valid_check=False):
     #Putting sfac_on_nn_on_psifacs, tau_r_on_psifacs on surface FOR CALCULATION ON MODE
     replica_data_array=dconxr.qs[0].copy()
     replica_data_array2=dconxr.qs[0].copy()
+    replica_data_array3=dconxr.qs[0].copy()
+    replica_data_array4=dconxr.qs[0].copy()
     assert dconxr.qs.ipsis.values[0]==0
     for i in dconxr.qs.ipsis.values:
         replica_data_array[i]=sfac_on_nn_on_psifacs[i]
         replica_data_array2[i]=tau_r_on_psifacs[i]
+        replica_data_array3[i]=ni_on_psifacs[i]
+        replica_data_array4[i]=ne_on_psifacs[i]
     dconxr=dconxr.assign(sfacs_on_nn=0.0*dconxr['qs']+replica_data_array)
     dconxr=dconxr.assign(tau_rs=0.0*dconxr['qs']+replica_data_array)
+    dconxr=dconxr.assign(ni_on_psifacs=0.0*dconxr['qs']+replica_data_array3)
+    dconxr=dconxr.assign(ne_on_psifacs=0.0*dconxr['qs']+replica_data_array4)
 
     #Putting X0_no_nn_on_psifacs on surface FOR CALCULATION ON MODE
     replica_data_array=dconxr.qs[0].copy()
@@ -392,7 +419,7 @@ def neo_terms_on_psifacs1_local(dconxr,dcon_mcind,tok_xr):
     #   Hbs term:
     #avg_BJbs_on_psifacs=local_tok_xr.avg_BJbs_on_linspace_psi_dynamo.interp(dim_rho=interp_dim_rho_vals, method="cubic")
 
-    #mufracs 
+    #mufracs
     replica_data_array=dconxr.Dnc_prefacs[0].copy()
     assert dconxr.Dnc_prefacs.ipsis.values[0]==0
     for i in dconxr.Dnc_prefacs.ipsis.values:
@@ -481,7 +508,7 @@ def neo_terms_on_psifacs1b_local(dconxr,dcon_mcind,tok_xr,verbose=False):
 
     #Converting key terms to psifac splines:
     #   <B> term:
-    #local_tok_xr=local_tok_xr.assign(avg_B_on_linspace_psi_dynamo=local_tok_xr['avg_BJbs_on_linspace_psi_dynamo']/local_tok_xr['Jbs_GSinput_on_linspace_psi_dynamo'])
+    local_tok_xr=local_tok_xr.assign(avg_B_on_linspace_psi_dynamo=local_tok_xr['modb_avgs[0]'])
     #print(dconxr.qs.ipsis.values[-1])
     #print(dconxr.qs.ipsis.values[-2])
     #print(local_tok_xr.avg_B_on_linspace_psi_dynamo)
@@ -491,9 +518,9 @@ def neo_terms_on_psifacs1b_local(dconxr,dcon_mcind,tok_xr,verbose=False):
     #print(local_tok_xr.avg_B_on_linspace_psi_dynamo.dim_0.values)
     #print(local_tok_xr.avg_B_on_linspace_psi_dynamo.dim_0.values[-1])
 
-    #local_tok_xr.avg_B_on_linspace_psi_dynamo.loc[dict(dim_0=local_tok_xr.avg_B_on_linspace_psi_dynamo.dim_0.values[-1])]=local_tok_xr.avg_B_on_linspace_psi_dynamo.values[-2]
-    #local_tok_xr=local_tok_xr.assign(avg_Bsq_on_linspace_psi_dynamo=local_tok_xr['avg_B_on_linspace_psi_dynamo']*local_tok_xr['avg_B_on_linspace_psi_dynamo']) 
-    #avg_Bsq_on_psifacs=local_tok_xr.avg_Bsq_on_linspace_psi_dynamo.interp(dim_0=interp_dim_rho_vals, method="cubic").values
+   # local_tok_xr.avg_B_on_linspace_psi_dynamo.loc[dict(dim_0=local_tok_xr.avg_B_on_linspace_psi_dynamo.dim_0.values[-1])]=local_tok_xr.avg_B_on_linspace_psi_dynamo.values[-2]
+    local_tok_xr=local_tok_xr.assign(avg_Bsq_on_linspace_psi_dynamo=local_tok_xr['avg_B_on_linspace_psi_dynamo']*local_tok_xr['avg_B_on_linspace_psi_dynamo']) 
+    avg_Bsq_on_psifacs=local_tok_xr.avg_Bsq_on_linspace_psi_dynamo.interp(dim_0=interp_dim_rho_vals, method="cubic").values
 
     #if verbose:
         #print("avg_B_on_linspace_psi_dynamo= ",local_tok_xr.avg_B_on_linspace_psi_dynamo.values)
@@ -502,27 +529,69 @@ def neo_terms_on_psifacs1b_local(dconxr,dcon_mcind,tok_xr,verbose=False):
         #print("avg_Bsq_on_psifacs = ",avg_Bsq_on_psifacs)
 
     #(dp/dr / B^2) on psifacs:
-    #mu0_p_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.mu0_ps[0].values)
-    #mu0mu0_p1_on_Bsq=[mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i] for i in range(len(psis))]
-    #dconxr = dconxr.assign(mu0_p1_on_Bsqs=0.0*dconxr['qs']+mu0mu0_p1_on_Bsq)
-    #replica_data_array=dconxr.qs.copy()
-    #assert dconxr.qs.ipsis.values[0]==0
-    #for i in dconxr.qs.ipsis.values:
-    #    replica_data_array[i]=mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]
-    #    if verbose:
-    #        print(f"psifac={psis[i]}, mu0_p_on_Bsq={mu0_p_spln(psis[i])/avg_Bsq_on_psifacs[i]}, mu0_pprime_on_Bsq={mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]}")
-    #dconxr=dconxr.assign(mu0_p1_on_Bsqs=0.0*dconxr['qs']+replica_data_array)
+    mu0_p_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.mu0_ps[0].values)
+    mu0mu0_p1_on_Bsq=[mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i] for i in range(len(psis))]
+    dconxr = dconxr.assign(mu0_p1_on_Bsqs=0.0*dconxr['qs']+mu0mu0_p1_on_Bsq)
+    replica_data_array=dconxr.qs[0].copy()
+    assert dconxr.qs.ipsis.values[0]==0
+    #print(len(psis))
+    #print(len(avg_Bsq_on_psifacs))
+    #print(len(replica_data_array))
+    for i in dconxr.qs.ipsis.values:
+        #print(f"psifac={psis[i]}, mu0_p_on_Bsq={mu0_p_spln(psis[i])/avg_Bsq_on_psifacs[i]}, mu0_pprime_on_Bsq={mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]}")
+        replica_data_array[i]=mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]
+        if verbose:
+            print(f"psifac={psis[i]}, mu0_p_on_Bsq={mu0_p_spln(psis[i])/avg_Bsq_on_psifacs[i]}, mu0_pprime_on_Bsq={mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]}")
+    dconxr=dconxr.assign(mu0_p1_on_Bsqs=0.0*dconxr['qs']+replica_data_array)
+
+    #(dp/dr / p) on psifacs:
+    replica_data_array=dconxr.qs[0].copy()
+    assert dconxr.qs.ipsis.values[0]==0
+    #print(len(psis))
+    #print(len(avg_Bsq_on_psifacs))
+    #print(len(replica_data_array))
+    for i in dconxr.qs.ipsis.values:
+        #print(f"psifac={psis[i]}, mu0_p_on_Bsq={mu0_p_spln(psis[i])/avg_Bsq_on_psifacs[i]}, mu0_pprime_on_Bsq={mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]}")
+        replica_data_array[i]=mu0_p_spln(psis[i],1)/dconxr.mu0_ps[0].values[i]
+    dconxr=dconxr.assign(p1_on_ps=0.0*dconxr['qs']+replica_data_array)
+
+    print(dconxr.Avg_minor_rs[0].values)
+    p_on_min_radii_spln=CubicSpline(dconxr.Avg_minor_rs[0].values,(1/mu0)*dconxr.mu0_ps[0].values)
+    p_on_min_radii2_spln=CubicSpline(np.sqrt(dconxr.psifacs[0].values)*local_tok_xr.minor_radius[0].values,(1/mu0)*dconxr.mu0_ps[0].values)
+    q_on_min_radii_spln=CubicSpline(dconxr.Avg_minor_rs[0].values,dconxr.qs[0].values)
+    q_on_min_radii2_spln=CubicSpline(np.sqrt(dconxr.psifacs[0].values)*local_tok_xr.minor_radius[0].values,dconxr.qs[0].values)
+
+    dp_drs=[p_on_min_radii_spln(psis[i],1) for i in range(len(psis))]
+    dp_drs2=[p_on_min_radii2_spln(psis[i],1) for i in range(len(psis))]
+    dq_drs=[q_on_min_radii_spln(psis[i],1) for i in range(len(psis))]
+    dq_drs2=[q_on_min_radii2_spln(psis[i],1) for i in range(len(psis))]
+
+    replica_data_array=dconxr.qs[0].copy()
+    replica_data_array2=dconxr.qs[0].copy()
+    replica_data_array3=dconxr.qs[0].copy()
+    replica_data_array4=dconxr.qs[0].copy()
+    assert dconxr.qs.ipsis.values[0]==0
+    for i in dconxr.qs.ipsis.values:
+        replica_data_array[i]=dp_drs[i]
+        replica_data_array2[i]=dp_drs2[i]
+        replica_data_array3[i]=dq_drs[i]
+        replica_data_array4[i]=dq_drs2[i]
+    dconxr=dconxr.assign(dp_drs=0.0*dconxr['qs']+replica_data_array)
+    dconxr=dconxr.assign(dp_drs2=0.0*dconxr['qs']+replica_data_array2)
+    dconxr=dconxr.assign(dq_drs=0.0*dconxr['qs']+replica_data_array3)
+    dconxr=dconxr.assign(dq_drs2=0.0*dconxr['qs']+replica_data_array4)
 
     #Remaining term [Dnc subtracting the shear and p' term...]:::: MAKE IT REPLICA DATA ARRAY
-    #replica_data_array=dconxr.Dnc_prefacs.copy()
-    #assert dconxr.Dnc_prefacs.ipsis.values[0]==0
-    #for i in dconxr.Dnc_prefacs.ipsis.values:
-    #    qshear = qspln(psis[i],1)/dconxr.qs[i].values
-    #    pshear = mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]
-    #    replica_data_array[i]=replica_data_array[i].values*qshear/pshear
-    #    if verbose:
-    #        print(f"psifac={psis[i]}, Dnc_prefacs={dconxr.Dnc_prefacs[i].values}, qshear={qshear}, pshear={pshear}, Dnc*qshear/pshear={replica_data_array[i].values}")
-    #dconxr=dconxr.assign(Dnc_geom_facs=0.0*dconxr['Dnc_prefacs']+replica_data_array)
+    replica_data_array=dconxr.Dnc_prefacs[0].copy()
+    assert dconxr.Dnc_prefacs[0].ipsis.values[0]==0
+    for i in dconxr.Dnc_prefacs[0].ipsis.values:
+        print(f"psifac={psis[i]}, Dnc_prefacs={dconxr.Dnc_prefacs[0][i].values}, qshear={qspln(psis[i],1)/dconxr.qs[0][i].values}, pshear={mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]}")
+        qshear = qspln(psis[i],1)/dconxr.qs[0][i].values
+        pshear = mu0_p_spln(psis[i],1)/avg_Bsq_on_psifacs[i]
+        replica_data_array[i]=replica_data_array[i].values*qshear/pshear
+        if verbose:
+            print(f"psifac={psis[i]}, Dnc_prefacs={dconxr.Dnc_prefacs[0][i].values}, qshear={qshear}, pshear={pshear}, Dnc*qshear/pshear={replica_data_array[i].values}")
+    dconxr=dconxr.assign(Dnc_geom_facs=0.0*dconxr['Dnc_prefacs']+replica_data_array)
 
     return dconxr
 
@@ -804,7 +873,7 @@ def eval_well_hill(approx_minor_radius,dconxr):
     return wellhill_minor_radius,minor_radius_closeness,steepness,iswell
 
 #Neo terms on modes... sure plot this 
-def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
+def neo_terms_on_modes_local(dconxr,tok_xr,verbose=False,k1=1.7):
     dconxr=dconxr.assign(k1=k1)
     #Already got Dh, Dh_alt
     #Just need Dnc, Hbs, Drbs
@@ -822,9 +891,9 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
     WcR_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.WcR_internal_prefacs[0].values)
     chi_parallel_prefac_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.chi_parallel_prefacs[0].values)
     #Dnc sub components
-    #qshear_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.q1_on_qs[0].values)
-    #pshear_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.mu0_p1_on_Bsqs[0].values)
-    #Dnc_geom_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Dnc_geom_facs[0].values)
+    qshear_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.q1_on_qs[0].values)
+    pshear_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.mu0_p1_on_Bsqs[0].values)
+    Dnc_geom_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Dnc_geom_facs[0].values)
     #Linear layer widths & info
     sfacs_on_nn_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.sfacs_on_nn[0].values)
     tau_rs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.tau_rs[0].values)
@@ -836,6 +905,39 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
     #dJt2_drs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.dJt2_drs[0].values)
     Jbss_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Jbss[0].values)
     Jbs_on_Jt2s_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Jbs_on_Jt2s[0].values)
+    
+    Btot_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_Btots[0].values)
+    Btor_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_Btors[0].values)
+    Bpol_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_Bpols[0].values)
+    r_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_minor_rs[0].values)
+    R_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_Rs[0].values)
+    one_on_R_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_1_on_Rs[0].values)
+    JdotBpols_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.JdotBpols[0].values)
+    JdotBtors_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.JdotBtors[0].values)
+    Jparas_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Jparas[0].values)
+    Jpols_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Jpols[0].values)
+    Jtors_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Jtors[0].values)
+    Jboot_dot_Bs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Jboot_dot_Bs[0].values/mu0)
+    Avg_Btot_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Avg_Btots[0].values)
+    Dnc_simps_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Dnc_simps[0].values)
+    mu0_p_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.mu0_ps[0].values)
+
+    p1_on_p_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.p1_on_ps[0].values)
+    Te_Kev_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Te_Kev_s[0].values)
+    Ti_Kev_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Ti_Kev_s[0].values)
+    v_te_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.v_te_s[0].values)
+    v_ti_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.v_ti_s[0].values)
+    ni_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.ni_on_psifacs[0].values)
+    ne_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.ne_on_psifacs[0].values)
+    dp_drs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.dp_drs[0].values)
+    dp_drs2_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.dp_drs2[0].values)
+    dq_drs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.dq_drs[0].values)
+    dq_drs2_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.dq_drs2[0].values)
+    qspln=CubicSpline(dconxr.psifacs[0].values,dconxr.qs[0].values)
+
+    #I NEED total B, Bt (get from F), B_poloidal (!!), minor radius, electron and ion temps (all for ion larmor radius), pressure shear legnthscale
+    #I can also get the basic trapped fraction
+    #   Take these all straight from DCON
 
     #Dnc 
     if len(dconxr.ns_rdcon_ran.values)==0 or max(dconxr.ns_rdcon_ran.values)<1:
@@ -893,6 +995,34 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
     replica_data_array_wellhill_approx_minor_radius_closeness=dconxr.Re_DeltaPrime.copy()
     replica_data_array_wellhill_steepness=dconxr.Re_DeltaPrime.copy()
     replica_data_array_iswell=dconxr.Re_DeltaPrime.copy()
+    #LaHaye terms
+    replica_data_array_Btot=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Btor=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Bpol=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_r=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_R=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_one_on_R=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_JdotBpols=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_JdotBtors=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Jparas=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Jpols=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Jtors=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Jboot_dot_Bs=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Avg_Btot=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_Dnc_simps=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_mu0_p=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_p1_on_p=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_T_e_Kev=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_T_i_Kev=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_v_te=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_v_ti=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_ni=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_ne=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_dp_drs=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_dp_drs2=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_dq_drs=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_dq_drs2=dconxr.Re_DeltaPrime.copy()
+    replica_data_array_q=dconxr.Re_DeltaPrime.copy()
     for n in dconxr.Re_DeltaPrime.n.values:
         for m in dconxr.Re_DeltaPrime.m.values:
             psifac=dconxr.psifac.sel(n=n,m=m).values
@@ -933,9 +1063,9 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
             Di=dconxr.Di.sel(n=n,m=m).values
             Dnc=Dnc_spln(psifac)
             mufrac=mufrac_spln(psifac)
-            #qshear=qshear_spln(psifac)
-            #pshear=pshear_spln(psifac)
-            #Dnc_geom=Dnc_geom_spln(psifac)
+            qshear=qshear_spln(psifac)
+            pshear=pshear_spln(psifac)
+            Dnc_geom=Dnc_geom_spln(psifac)
             alpha_l_alt=dconxr.alpha_l_alt.sel(n=n,m=m).values
             alpha_s_alt=dconxr.alpha_s_alt.sel(n=n,m=m).values
 
@@ -951,8 +1081,8 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
             marg_wbarR_Wc=np.nan
             deltaPrime_pscaling=np.nan
             deltaPrime_pscalingR=np.nan
-            if n==1:
-                print(f"n,m={n},{m}: Deltaprime={DeltaPrimeDimless},psifac={psifac}, Wc_bar_no_w={DeltaPrimeDimless}, Dh_alt={Dh_alt}, Di={Di}, Dnc={Dnc}, alpha_l_alt={alpha_l_alt}, alpha_s_alt={alpha_s_alt}, Wc_bar_no_w={Wc_bar_no_w}, WcR_bar_no_w={WcR_bar_no_w}")
+            if not np.isnan(min([DeltaPrimeDimless,psifac,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt])):
+                print(f"n,m={n},{m}: Deltaprime={DeltaPrimeDimless},psifac={psifac}, Dh_alt={Dh_alt}, Di={Di}, Dnc={Dnc}, alpha_l_alt={alpha_l_alt}, alpha_s_alt={alpha_s_alt}, Wc_bar_no_w={Wc_bar_no_w}, WcR_bar_no_w={WcR_bar_no_w}")
             #if psifac<0.905 and (not np.isnan(np.sum(np.array([DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt])))):
             if psifac<0.95 and (not np.isnan(np.sum(np.array([DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt])))):
                 if True:
@@ -967,14 +1097,16 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
 
                 if False:
                     print(f"m,n={m},{n}: Deltaprime={DeltaPrimeDimless}, wbar1={marg_wbar}, wbar2={marg_wbarR}, Island_width_comparisons: {marg_wbarR_Wc},{marg_wbarR_WcR}")
+                
+                print(f"          marg_wbarR={marg_wbarR}, Wc_bar_no_w={Wc_bar_no_w}, WcR_bar_no_w={WcR_bar_no_w}")
 
             #replica_Drbss_data_array.loc[dict(n=n,m=m)]=Drbss_spln(psifac)
             replica_DrbsH_alts_data_array.loc[dict(n=n,m=m)]=DrbsH_alts_spln(psifac)
             replica_Dnc_data_array.loc[dict(n=n,m=m)]=Dnc
             replica_mufrac_data_array.loc[dict(n=n,m=m)]=mufrac
-            #replica_qshear_data_array.loc[dict(n=n,m=m)]=qshear
-            #replica_pshear_data_array.loc[dict(n=n,m=m)]=pshear
-            #replica_Dnc_geom_data_array.loc[dict(n=n,m=m)]=Dnc_geom
+            replica_qshear_data_array.loc[dict(n=n,m=m)]=qshear
+            replica_pshear_data_array.loc[dict(n=n,m=m)]=pshear
+            replica_Dnc_geom_data_array.loc[dict(n=n,m=m)]=Dnc_geom
             replica_Wc_bar_data_array.loc[dict(n=n,m=m)]=Wc_bar_no_w
             replica_WcR_bar_data_array.loc[dict(n=n,m=m)]=WcR_bar_no_w
             replica_data_arrayWc_geom_fac.loc[dict(n=n,m=m)]=(1/psio)*(Wc_geom_term_spln(psifac))**(1/4)
@@ -1012,6 +1144,33 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
             #replica_data_array_wellhill_approx_minor_radius_closeness.loc[dict(n=n,m=m)]=minor_radius_closeness
             #replica_data_array_wellhill_steepness.loc[dict(n=n,m=m)]=steepness
             #replica_data_array_iswell.loc[dict(n=n,m=m)]=iswell
+            replica_data_array_Btot.loc[dict(n=n,m=m)]=Btot_spln(psifac)
+            replica_data_array_Btor.loc[dict(n=n,m=m)]=Btor_spln(psifac)
+            replica_data_array_Bpol.loc[dict(n=n,m=m)]=Bpol_spln(psifac)
+            replica_data_array_r.loc[dict(n=n,m=m)]=r_spln(psifac)
+            replica_data_array_R.loc[dict(n=n,m=m)]=R_spln(psifac)
+            replica_data_array_one_on_R.loc[dict(n=n,m=m)]=one_on_R_spln(psifac)
+            replica_data_array_JdotBpols.loc[dict(n=n,m=m)]=JdotBpols_spln(psifac)
+            replica_data_array_JdotBtors.loc[dict(n=n,m=m)]=JdotBtors_spln(psifac)
+            replica_data_array_Jparas.loc[dict(n=n,m=m)]=Jparas_spln(psifac)
+            replica_data_array_Jpols.loc[dict(n=n,m=m)]=Jpols_spln(psifac)
+            replica_data_array_Jtors.loc[dict(n=n,m=m)]=Jtors_spln(psifac)
+            replica_data_array_Jboot_dot_Bs.loc[dict(n=n,m=m)]=Jboot_dot_Bs_spln(psifac)
+            replica_data_array_Avg_Btot.loc[dict(n=n,m=m)]=Avg_Btot_spln(psifac)
+            replica_data_array_Dnc_simps.loc[dict(n=n,m=m)]=Dnc_simps_spln(psifac)
+            replica_data_array_mu0_p.loc[dict(n=n,m=m)]=mu0_p_spln(psifac)
+            replica_data_array_p1_on_p.loc[dict(n=n,m=m)]=p1_on_p_spln(psifac)
+            replica_data_array_T_e_Kev.loc[dict(n=n,m=m)]=Te_Kev_spln(psifac)
+            replica_data_array_T_i_Kev.loc[dict(n=n,m=m)]=Ti_Kev_spln(psifac)
+            replica_data_array_v_te.loc[dict(n=n,m=m)]=v_te_spln(psifac)
+            replica_data_array_v_ti.loc[dict(n=n,m=m)]=v_ti_spln(psifac)
+            replica_data_array_ni.loc[dict(n=n,m=m)]=ni_spln(psifac)
+            replica_data_array_ne.loc[dict(n=n,m=m)]=ne_spln(psifac)
+            replica_data_array_dp_drs.loc[dict(n=n,m=m)]=dp_drs_spln(psifac)
+            replica_data_array_dp_drs2.loc[dict(n=n,m=m)]=dp_drs2_spln(psifac)
+            replica_data_array_dq_drs.loc[dict(n=n,m=m)]=dq_drs_spln(psifac)
+            replica_data_array_dq_drs2.loc[dict(n=n,m=m)]=dq_drs2_spln(psifac)
+            replica_data_array_q.loc[dict(n=n,m=m)]=qspln(psifac)
 
             if False:
                 print("PSIFAC=",psifac,"m,n=",m,n)
@@ -1085,6 +1244,7 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
 
     #Wc terms and sub-terms
     dconxr=dconxr.assign(Wc_no_w=0.0*dconxr['Re_DeltaPrime']+replica_Wc_bar_data_array)
+    dconxr=dconxr.assign(Wc_self_consistent=dconxr['Wc_no_w']**(4/3))
     dconxr=dconxr.assign(Wc_no_w_no_modes=dconxr['Wc_no_w']/((dconxr['n']/(dconxr['m']*dconxr['m']))**(1/4)))
     dconxr=dconxr.assign(chi_parallel_no_ne_no_w=0.0*dconxr['Re_DeltaPrime']+replica_data_arraychi_parallel_no_w)
     dconxr=dconxr.assign(chi_parallel_no_ne_no_w_no_n=dconxr['chi_parallel_no_ne_no_w']*dconxr['n'])
@@ -1106,6 +1266,56 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
     dconxr=dconxr.assign(linOnWmargR=0.0*dconxr['Re_DeltaPrime']+replica_data_array_linOnWmargR)
     dconxr=dconxr.assign(linOnWc=0.0*dconxr['Re_DeltaPrime']+replica_data_array_linOnWc)
     dconxr=dconxr.assign(linOnWcR=0.0*dconxr['Re_DeltaPrime']+replica_data_array_linOnWcR)
+
+    #LaHaye terms
+    dconxr=dconxr.assign(Btot=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Btot)
+    dconxr=dconxr.assign(Btor=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Btor)
+    dconxr=dconxr.assign(Bpol=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Bpol)
+    dconxr=dconxr.assign(r=0.0*dconxr['Re_DeltaPrime']+replica_data_array_r)
+    dconxr=dconxr.assign(R=0.0*dconxr['Re_DeltaPrime']+replica_data_array_R)
+    dconxr=dconxr.assign(one_on_R=0.0*dconxr['Re_DeltaPrime']+replica_data_array_one_on_R)
+    dconxr=dconxr.assign(JdotBpol=0.0*dconxr['Re_DeltaPrime']+replica_data_array_JdotBpols)
+    dconxr=dconxr.assign(JdotBtor=0.0*dconxr['Re_DeltaPrime']+replica_data_array_JdotBtors)
+    dconxr=dconxr.assign(Jpara=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Jparas)
+    dconxr=dconxr.assign(Jpol=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Jpols)
+    dconxr=dconxr.assign(Jtor=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Jtors)
+    dconxr=dconxr.assign(Jboot_dot_B=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Jboot_dot_Bs)
+    dconxr=dconxr.assign(Avg_Btot=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Avg_Btot)
+    dconxr=dconxr.assign(Dnc_simp=0.0*dconxr['Re_DeltaPrime']+replica_data_array_Dnc_simps)
+    dconxr=dconxr.assign(mu0_p=0.0*dconxr['Re_DeltaPrime']+replica_data_array_mu0_p)
+    dconxr=dconxr.assign(p1_on_p=0.0*dconxr['Re_DeltaPrime']+replica_data_array_p1_on_p)
+    dconxr=dconxr.assign(Te_Kev=0.0*dconxr['Re_DeltaPrime']+replica_data_array_T_e_Kev)
+    dconxr=dconxr.assign(Ti_Kev=0.0*dconxr['Re_DeltaPrime']+replica_data_array_T_i_Kev)
+    dconxr=dconxr.assign(v_te=0.0*dconxr['Re_DeltaPrime']+replica_data_array_v_te)
+    dconxr=dconxr.assign(v_ti=0.0*dconxr['Re_DeltaPrime']+replica_data_array_v_ti)
+    dconxr=dconxr.assign(ni=0.0*dconxr['Re_DeltaPrime']+replica_data_array_ni)
+    dconxr=dconxr.assign(ne=0.0*dconxr['Re_DeltaPrime']+replica_data_array_ne)
+    dconxr=dconxr.assign(dp_dr=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dp_drs)
+    dconxr=dconxr.assign(dp_dr2=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dp_drs2)
+    dconxr=dconxr.assign(dq_dr=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dq_drs)
+    dconxr=dconxr.assign(dq_dr2=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dq_drs2)
+    dconxr=dconxr.assign(q=0.0*dconxr['Re_DeltaPrime']+replica_data_array_q)
+    #Important values
+    e=1.60217663e-19
+    me=9.1091e-31
+    dconxr=dconxr.assign(p=dconxr['mu0_p']/mu0)
+    dconxr=dconxr.assign(Lp=dconxr['p']/dconxr['dp_dr'])
+    dconxr=dconxr.assign(Lp_alt=dconxr['p']/dconxr['dp_dr2'])
+    dconxr=dconxr.assign(Lp_flux=1.0/(dconxr['p1_on_p']*2.0*dconxr['psifac']))
+    dconxr=dconxr.assign(Lq=dconxr['q']/dconxr['dq_dr'])
+    dconxr=dconxr.assign(Lq_alt=dconxr['q']/dconxr['dq_dr2'])
+    dconxr=dconxr.assign(eps_local=dconxr['r']/dconxr['R']) 
+    dconxr=dconxr.assign(pe=dconxr['Te_Kev']*1e3*dconxr['ne']*e)
+    dconxr=dconxr.assign(Beta_pe=2*mu0*dconxr['pe']/(dconxr['Bpol']**2))
+    dconxr=dconxr.assign(Beta=2*dconxr['mu0_p']/(dconxr['Btot']**2))
+    mi=tok_xr.average_ion_mass[0].values*1.66054e-27
+    dconxr=dconxr.assign(rho_i_theta=mi*dconxr['v_ti']/(dconxr['Bpol']*e)) #rho_i_theta = v_ti/(Bpol*one_on_R*T_i_Kev)
+    dconxr=dconxr.assign(rho_e_theta=me*dconxr['v_te']/(dconxr['Bpol']*e)) #rho_e_theta = v_te/(Bpol*one_on_R*T_e_Kev)
+    dconxr=dconxr.assign(Hayef1=np.abs(dconxr['Beta_pe']*dconxr['r']/dconxr['Lp']))
+    dconxr=dconxr.assign(Hayef1_alt=np.abs(dconxr['Beta_pe']*np.sqrt(dconxr['psifac'])*tok_xr.minor_radius[0].values/dconxr['Lp_alt']))
+    dconxr=dconxr.assign(Hayef1_alt2=np.abs(dconxr['Beta_pe']/dconxr['Lp_flux']))
+    dconxr=dconxr.assign(Hayef2=dconxr['rho_i_theta']/dconxr['r'])
+    dconxr=dconxr.assign(Hayef2_alt=dconxr['rho_i_theta']/(np.sqrt(dconxr['psifac'])*tok_xr.minor_radius[0].values))
 
     #Min cases etc...
     dconxr=dconxr.assign(min_marg_wbar=dconxr.marg_wbar.min().values)
@@ -1251,20 +1461,41 @@ def neo_terms_on_modes_local(dconxr,verbose=False,k1=1.7):
 
     return dconxr
 
+#def get_wd_self_consistent(dconxr,verbose=False):
+#    dconxr.Wc_no_w #these are Wc_bar without w_mar
+#    w_C_Bar=Wc_Bar_prefac*(w_mar**(1/4))   
+
+#    replica_data_array=dconxr.Wc_no_w.copy(deep=True)
+
+#    for n in dconxr.n.values:
+#        for m in dconxr.m.values: 
+#            Wc_no_w=dconxr.Wc_no_w.sel(n=n,m=m)
+#            wC_selfconsistent=wC_selfconsistent_solver(Wc_no_w)
+
+#def wC_selfconsistent_solver(Wc_no_w,startpoint=1e-10,rhs=1.0,tol=1e-12):
+#    while d_shift<tol:
+#        wC_selfconsistent=startpoint
+#        d_shift=1.0
+#        while d_shift > 1e-8:
+#            wC_selfconsistent_new=wC_selfconsistent-(Wc_no_w/wC_selfconsistent**(1/4))
+#            d_shift=np.abs(wC_selfconsistent_new-wC_selfconsistent)
+#            wC_selfconsistent=wC_selfconsistent_new
+
+
 def neo_surf_term_scalars_local(dconxr,drop_ends=False):
     #Dnc_spline=CubicSpline(dconxr.psifacs.values,dconxr.Dncs.values)
     #Hbs_spline=CubicSpline(dconxr.psifacs.values,dconxr.Hbss.values)
     #Drbs_spline=CubicSpline(dconxr.psifacs.values,dconxr.Drbss.values)
 
     if drop_ends:
-        dconxr=dconxr.where(dconxr.qs > 1.2, drop=True)
-        dconxr=dconxr.where(dconxr.qs < 2.1, drop=True)
-        dconxr=dconxr.where(dconxr.psifacs < 0.9, drop=True)# and dconxr.qs < 2.1 and dconxr.psifacs < 0.9)
+        dconxr=dconxr.where(dconxr.qs> 1.2, drop=True)
+        dconxr=dconxr.where(dconxr.qs< 2.1, drop=True)
+        dconxr=dconxr.where(dconxr.psifacs < 0.9, drop=True)# and dconxr.qs[0]< 2.1 and dconxr.psifacs < 0.9)
         surf_xr=dconxr
     else:
-        surf_xr=dconxr.where(dconxr.qs > 1.2, drop=True)
-        surf_xr=surf_xr.where(surf_xr.qs < 2.1, drop=True)
-        surf_xr=surf_xr.where(surf_xr.psifacs < 0.9, drop=True)# and dconxr.qs < 2.1 and dconxr.psifacs < 0.9)
+        surf_xr=dconxr.where(dconxr.qs> 1.2, drop=True)
+        surf_xr=surf_xr.where(surf_xr.qs< 2.1, drop=True)
+        surf_xr=surf_xr.where(surf_xr.psifacs < 0.9, drop=True)# and dconxr.qs[0]< 2.1 and dconxr.psifacs < 0.9)
 
     #dconxr=dconxr.assign(Drbs_max=surf_xr.Drbss.max())
     #argmax=surf_xr.Drbss.argmax().values
@@ -1342,6 +1573,147 @@ def neo_surf_term_scalars2_local(dconxr,dcon_mcind,tok_xr,verbose=False):
     return dconxr
 
 
+def MRE_haye_2017(dcon_xr):
+    # This broken: dcon_xr=dcon_xr.assign(JdotB=dcon_xr['JdotBtor']+dcon_xr['JdotBpol']) #JdotB is the total JdotB, not just toroidal
+    #Lq/rs = (q/(r*dq/dr))_rs = (2(psi dq/dpsi/q)^(-1)
+    #dcon_xr=dcon_xr.assign(HAYE_MRE_shear_s=2.0*dcon_xr['psifac']*dcon_xr['q1_on_q'])
+    dcon_xr=dcon_xr.assign(flux_MRE_shear_s=dcon_xr['psifac']*dcon_xr['q1_on_q'])
+    #dcon_xr=dcon_xr.assign(HAYE_MRE_c1=3*(dcon_xr['Jboot_dot_B']/dcon_xr['JdotB'])/dcon_xr['HAYE_MRE_shear_s'])
+    dcon_xr=dcon_xr.assign(HAYE_MRE_c1=3*(np.abs(0.4*(1000)*dcon_xr['Jboot_dot_B']/(dcon_xr['Avg_Btot']*dcon_xr['Jpara'])))/dcon_xr['flux_MRE_shear_s'])
+    #Term 1: 1/w_normalised (flux space)
+    #Term 2: 1/w_normalised^3 (flux space)
+    #Term 3: 1/w_normalised (flux space)
+    dcon_xr=dcon_xr.assign(HAYE_MRE_term2=-3.0*(2.0**2)*(np.sqrt(dcon_xr['eps_local'])*dcon_xr['rho_i_theta']/dcon_xr['r'])**2)
+    return dcon_xr
+
+def dWdtau_MRE_haye_2017(w_mar,DeltaPrimeDimless,Di,alpha_l_alt,HAYE_MRE_c1,HAYE_MRE_term2,HAYE_MRE_term3=0.0):
+    return (deltaPrime_bar(w_mar,DeltaPrimeDimless,Di,alpha_l_alt)+HAYE_MRE_c1/w_mar+HAYE_MRE_c1*HAYE_MRE_term2/(w_mar**3)+HAYE_MRE_c1*HAYE_MRE_term3/w_mar)
+
+def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
+    dconxr=MRE_haye_2017(dconxr)
+
+    replica_data_array1=dconxr.Re_DeltaPrime.copy()
+    replica_data_array2=dconxr.Re_DeltaPrime.copy()
+    replica_data_array3=dconxr.Re_DeltaPrime.copy()
+    replica_data_array4=dconxr.Re_DeltaPrime.copy()
+    replica_data_array5=dconxr.Re_DeltaPrime.copy()
+    replica_data_array6=dconxr.Re_DeltaPrime.copy()
+
+    wc_bar_vals=np.logspace(-8,0,num=1000)
+    for n in dconxr.n.values:
+        for m in dconxr.m.values:
+            dconxr_n_m=dconxr.sel(n=n,m=m)
+
+            replica_data_array1.loc[dict(n=n,m=m)]=np.nan #w_marg_haye_2017
+            replica_data_array2.loc[dict(n=n,m=m)]=np.nan #haye_2017_max_location
+            replica_data_array3.loc[dict(n=n,m=m)]=np.nan #haye_2017_max
+            replica_data_array4.loc[dict(n=n,m=m)]=np.nan #jcd_on_jbs
+            replica_data_array5.loc[dict(n=n,m=m)]=np.nan #jcd_on_jparallel
+            replica_data_array6.loc[dict(n=n,m=m)]=np.nan #jcd
+
+            if np.isnan(dconxr_n_m.Re_DeltaPrime.values) or np.isnan(dconxr_n_m.Di.values) or np.isnan(dconxr_n_m.alpha_l_alt.values) or np.isnan(dconxr_n_m.HAYE_MRE_c1.values) or np.isnan(dconxr_n_m.HAYE_MRE_term2.values):
+                continue
+
+            if dconxr_n_m.Re_DeltaPrime.values>0:
+                continue
+
+            if dconxr_n_m.Di.values>0 or dconxr_n_m.Dr.values>0:
+                continue
+
+            dwdtau_loc = lambda w_mar: dWdtau_MRE_haye_2017(w_mar,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Di.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.HAYE_MRE_c1.values,dconxr_n_m.HAYE_MRE_term2.values)
+            dwdtau_vals=dwdtau_loc(wc_bar_vals)
+
+            if max(dwdtau_vals)<0:
+                replica_data_array1.loc[dict(n=n,m=m)]=1.0
+                if verbose:
+                    if mchoose!=0 and m==mchoose:
+                        xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True)
+                        if not np.isnan(nancheck):
+                            plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, Dnc={dconxr_n_m.Dnc.values}, Wd")
+                        xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True,min_C_Bar_opt=True)
+                        if not np.isnan(nancheck):
+                            plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, minWd")
+                        plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
+                        plt.ylim(-300,20)
+                        plt.legend()
+                continue
+            
+            dwdtau_spln=CubicSpline(wc_bar_vals,dwdtau_vals,extrapolate=False) 
+            dwdtau_deriv_spln=CubicSpline(wc_bar_vals,dwdtau_spln(wc_bar_vals,1),extrapolate=False) 
+
+            if dwdtau_vals[0]>0:
+                replica_data_array1.loc[dict(n=n,m=m)]=np.nan
+            else:
+                replica_data_array1.loc[dict(n=n,m=m)]==dwdtau_spln.roots(extrapolate=False)[0]
+
+            #Solving for CD stabilisation:
+            try:
+                haye_2017_max_location=dwdtau_deriv_spln.roots(extrapolate=False)[0]
+                if verbose: 
+                    print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+                    if mchoose!=0 and m==mchoose:
+                        xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True)
+                        if not np.isnan(nancheck):
+                            plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, Dnc={dconxr_n_m.Dnc.values}, Wd")
+                        xs,ys,nancheck2=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True,min_C_Bar_opt=True)
+                        if not np.isnan(nancheck2):
+                            plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, minWd")
+                            plt.plot(np.log10(xs),xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefac")
+                            plt.plot(np.log10(xs),1.7*dconxr_n_m.Dnc.values*xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefacComb")
+                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent)],-300,100)
+                        plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
+                        plt.ylim(-300,20)
+                        plt.legend()
+            except:
+                print('cat')
+                print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+                plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
+                plt.ylim(-300,20)
+                plt.legend()
+                haye_2017_max_location=dwdtau_deriv_spln.roots(extrapolate=False)[0]
+                if verbose: 
+                    print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+                    if mchoose!=0 and m==mchoose:
+                        xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True)
+                        if not np.isnan(nancheck):
+                            plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, Dnc={dconxr_n_m.Dnc.values}, Wd")
+                        xs,ys,nancheck2=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True,min_C_Bar_opt=True)
+                        if not np.isnan(nancheck2):
+                            plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, minWd")
+                            plt.plot(np.log10(xs),xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefac")
+                            plt.plot(np.log10(xs),1.7*dconxr_n_m.Dnc.values*xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefacComb")
+                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent)],-300,100)
+                        plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
+                        plt.ylim(-300,20)
+                        plt.legend()
+                
+            haye_2017_max=dwdtau_loc(haye_2017_max_location)
+            replica_data_array2.loc[dict(n=n,m=m)]=haye_2017_max_location
+            replica_data_array3.loc[dict(n=n,m=m)]=haye_2017_max
+
+            if haye_2017_max>0: #rare case that its not
+                if verbose: print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+                jcd_on_jbs=haye_2017_max*haye_2017_max_location/(CDK1*dconxr_n_m.HAYE_MRE_c1.values)
+                jcd_on_jparallel=jcd_on_jbs*(np.abs(dconxr_n_m['Jboot_dot_B']/(dconxr_n_m['Avg_Btot']*dconxr_n_m['Jpara'])))
+                jcd=jcd_on_jparallel*np.abs(dconxr_n_m.Jpara.values)
+                replica_data_array4.loc[dict(n=n,m=m)]=jcd_on_jbs
+                replica_data_array5.loc[dict(n=n,m=m)]=jcd_on_jparallel
+                replica_data_array6.loc[dict(n=n,m=m)]=jcd
+
+            
+    dconxr=dconxr.assign(w_marg_haye_2017=0.0*dconxr['Re_DeltaPrime']+replica_data_array1)
+    dconxr=dconxr.assign(haye_2017_max_location=0.0*dconxr['Re_DeltaPrime']+replica_data_array2)
+    dconxr=dconxr.assign(haye_2017_max=0.0*dconxr['Re_DeltaPrime']+replica_data_array3)
+    dconxr=dconxr.assign(jcd_on_jbs=0.0*dconxr['Re_DeltaPrime']+replica_data_array4)
+    dconxr=dconxr.assign(jcd_on_jparallel=0.0*dconxr['Re_DeltaPrime']+replica_data_array5)
+    dconxr=dconxr.assign(jcd=0.0*dconxr['Re_DeltaPrime']+replica_data_array6)
+
+    return dconxr
+
+
+
+
+
 def get_bs_frac(local_tok_xr):
     #print(local_tok_xr.Jbs_GSinput_on_linspace_psi_dynamo)
     #raise   Exception("EY0")
@@ -1365,10 +1737,13 @@ def cross_section_surf_int(local_tok_xr,vals_to_int): #Not very reliable... to b
     return cross_section_surf_int_of_vals
 
 #w_mar is dimless here!!...
-def solve_marg_width(Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0=0.8227,k1=1.7):
+def solve_marg_width(Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0=0.8227,k1=1.7,plot=False,min_C_Bar_opt=False):
     #wc_bar_vals=np.linspace(1e-8,0.4,1000)
     wc_bar_vals=np.logspace(-8,0,num=1000)
-    dwdtau_loc = lambda w_mar: dWdtau(w_mar,Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0,k1)
+    if min_C_Bar_opt:
+        dwdtau_loc = lambda w_mar: dWdtau_alt(w_mar,Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0,k1)
+    else:
+        dwdtau_loc = lambda w_mar: dWdtau(w_mar,Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0,k1)
     dwdtau_vals=dwdtau_loc(wc_bar_vals)
 
     if dwdtau_vals[0]>0:
@@ -1379,6 +1754,8 @@ def solve_marg_width(Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,a
     #raise
     dwdtau_spln=CubicSpline(wc_bar_vals,dwdtau_vals,extrapolate=False) 
     w_mar=dwdtau_spln.roots(extrapolate=False)
+    if plot:
+        return wc_bar_vals,dwdtau_vals,1.0
 
     if len(w_mar)>0:
         return w_mar[0],(w_mar[0]**(1/4)*Wc_Bar_prefac),((w_mar[0]/2)**(-2*alpha_l_alt))*np.sqrt(-4*Di)
@@ -1387,6 +1764,11 @@ def solve_marg_width(Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,a
 
 def dWdtau(w_mar,Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0,k1):
     w_C_Bar=Wc_Bar_prefac*(w_mar**(1/4))
+    return (deltaPrime_bar(w_mar,DeltaPrimeDimless,Di,alpha_l_alt)+Dh_term(w_mar,w_C_Bar,k1,Dh_alt,alpha_s_alt)+Dnc_term(w_mar,w_C_Bar,k1,Dnc))
+
+def dWdtau_alt(w_mar,Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0,k1):
+    #w_C_Bar=Wc_Bar_prefac*(w_mar**(1/4))
+    w_C_Bar=Wc_Bar_prefac**(4/3)
     return (deltaPrime_bar(w_mar,DeltaPrimeDimless,Di,alpha_l_alt)+Dh_term(w_mar,w_C_Bar,k1,Dh_alt,alpha_s_alt)+Dnc_term(w_mar,w_C_Bar,k1,Dnc))
 
 #Whole thing w^-1
