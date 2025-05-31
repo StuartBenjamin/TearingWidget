@@ -1248,6 +1248,7 @@ def neo_terms_on_modes_local(dconxr,tok_xr,verbose=False,k1=1.7):
     dconxr=dconxr.assign(Wc_no_w_no_modes=dconxr['Wc_no_w']/((dconxr['n']/(dconxr['m']*dconxr['m']))**(1/4)))
     dconxr=dconxr.assign(chi_parallel_no_ne_no_w=0.0*dconxr['Re_DeltaPrime']+replica_data_arraychi_parallel_no_w)
     dconxr=dconxr.assign(chi_parallel_no_ne_no_w_no_n=dconxr['chi_parallel_no_ne_no_w']*dconxr['n'])
+
     dconxr=dconxr.assign(WcR_no_w=0.0*dconxr['Re_DeltaPrime']+replica_WcR_bar_data_array)
     dconxr=dconxr.assign(Wc_geom_fac=0.0*dconxr['Re_DeltaPrime']+replica_data_arrayWc_geom_fac)
     dconxr=dconxr.assign(Wc_at_marg_wbar=0.0*dconxr['Re_DeltaPrime']+replica_data_arrayWc_at_marg_wbar)
@@ -1461,6 +1462,66 @@ def neo_terms_on_modes_local(dconxr,tok_xr,verbose=False,k1=1.7):
 
     return dconxr
 
+def wd_alt(dconxr,tok_xr,verbose=False,Zeff=1.5,temp_chi_perp=0.0,reducedm=0,reducedn=0):
+    #Fitz uses 16
+    #Wesson uses
+    me=9.1091e-31
+
+    psio=dconxr.psio[0].values
+
+    chi_perp=dconxr.chi_perp_no_ne[0].values
+    if temp_chi_perp !=0.0:
+        chi_perp=temp_chi_perp
+
+    dconxr=dconxr.assign(lnLamb_ei = 15.2-0.5*np.log(dconxr['ne']/1e20)+np.log(dconxr['Te_Kev']))
+    dconxr=dconxr.assign(taue_ei=1.09*(10**16)*(dconxr['Te_Kev']**(3/2))/(dconxr['ne']*dconxr['lnLamb_ei'])) #in seconds
+    dconxr=dconxr.assign(chi_para_smfp=1.581*dconxr['taue_ei']*dconxr['v_te']**2/(1+0.2535*tok_xr['z_effective'][0]))
+    #2in denom, 2 in numerator,(rosenburg 33, Fitz 14.206)
+    R0=tok_xr['major_radius'][0].values
+    dconxr=dconxr.assign(chi_para_lmfp_no_wbar=2*R0*dconxr['v_te']*dconxr['psifac']/(np.sqrt(np.pi)*dconxr['n']*dconxr['flux_MRE_shear_s'])) #Divide by wbar to get chi_parallel_lmfp
+    
+    Wc_prefacs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Wc_prefacs[0].values) #Mult by chifrac, div by m^2 to get thing inside ()**(1/4)
+
+    temp_data_array=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array2=dconxr.Re_DeltaPrime.copy(deep=True)
+    for n in dconxr.n.values:
+        for m in dconxr.m.values:
+            if reducedm!=0 and m!=reducedm:
+                continue
+            if reducedn!=0 and n!=reducedn:
+                continue
+            dconxr_m_n=dconxr.sel(n=n,m=m)
+            chi_para_smfp=dconxr_m_n.chi_para_smfp.values
+            chi_para_lmfp_no_wbar=dconxr_m_n.chi_para_lmfp_no_wbar.values
+
+            Wc_prefac=Wc_prefacs_spln(dconxr_m_n.psifac.values)
+            wd_bar_to_power_of_4_no_chifrac_full=(1/psio)**4*Wc_prefac/(dconxr_m_n.m.values**2)
+            wd_bar_to_power_of_4_no_chifrac_fitz=(2*np.sqrt(8))**4*(1/(dconxr_m_n.eps_local.values*2.0*dconxr_m_n.flux_MRE_shear_s.values*dconxr_m_n.n.values)**(2))
+            wd_bar_to_power_of_4_no_chifrac_fitz_all_radial=(np.sqrt(8))**4*(1/(dconxr_m_n.eps_local.values*(dconxr_m_n.r.values/dconxr_m_n.Lq)*dconxr_m_n.n.values)**(2))
+            wd_bar_start=dconxr_m_n.X0.values**4
+            wd_bar4_1=wd_bar_start #wd_bar_1: full geometry,               full chi_parallel
+            wd_bar4_2=wd_bar_start #wd_bar_2: Fitz geometry (flux space),  full chi_parallel
+            wd_bar4_3=wd_bar_start #wd_bar_3: full geometry,               simple chi_parallel
+            wd_bar4_4=wd_bar_start #wd_bar_4: Fitz geometry (flux space),  simple chi_parallel
+            wd_bar4_5=wd_bar_start #wd_bar_5: Fitz geometry (meters),      full chi_parallel
+            print(f"m,n = {m},{n} wd_bar_start: {wd_bar_start**(1/4):.3e} wd_bar_to_power_of_4_no_chifrac_full: {wd_bar_to_power_of_4_no_chifrac_full:.3e} wd_bar_to_power_of_4_no_chifrac_fitz: {wd_bar_to_power_of_4_no_chifrac_fitz:.3e}")
+            for i in range(10):
+                wd_bar4_1 = wd_bar_to_power_of_4_no_chifrac_full*(chi_perp/(chi_para_smfp*chi_para_lmfp_no_wbar/(chi_para_lmfp_no_wbar+chi_para_smfp*wd_bar4_1**(1/4))))
+                wd_bar4_2 = wd_bar_to_power_of_4_no_chifrac_fitz*(chi_perp/(chi_para_smfp*chi_para_lmfp_no_wbar/(chi_para_lmfp_no_wbar+chi_para_smfp*wd_bar4_2**(1/4))))
+                wd_bar4_3 = wd_bar_to_power_of_4_no_chifrac_full*(chi_perp/(chi_para_lmfp_no_wbar/wd_bar4_3**(1/4)))
+                wd_bar4_4 = wd_bar_to_power_of_4_no_chifrac_fitz*(chi_perp/(chi_para_lmfp_no_wbar/wd_bar4_4**(1/4)))
+                wd_bar4_5 = wd_bar_to_power_of_4_no_chifrac_fitz_all_radial*(chi_perp/(chi_para_smfp*chi_para_lmfp_no_wbar/(chi_para_lmfp_no_wbar+chi_para_smfp*wd_bar4_2**(1/4))))
+                if True:
+                    if i==0:
+                        print("m,n = ",m,n," ",i,f" wd_bar_1: {wd_bar_start**(1/4):.3e} wd_bar_2: {wd_bar_start**(1/4):.3e} wd_bar_3: {wd_bar_start**(1/4):.3e} wd_bar_4: {wd_bar_start**(1/4):.3e} wd_bar_5: {wd_bar_start**(1/4):.3e} chi_para_lmfp: {chi_para_lmfp_no_wbar/(wd_bar4_1**(1/4)):.3e} chi_para_smfp: {chi_para_smfp:.3e}")
+                    if i ==9:
+                        print("           ",i,f" wd_bar_1: {wd_bar4_1**(1/4):.3e} wd_bar_2: {wd_bar4_2**(1/4):.3e} wd_bar_3: {wd_bar4_3**(1/4):.3e} wd_bar_4: {wd_bar4_4**(1/4):.3e} wd_bar_5: {wd_bar4_5**(1/4):.3e} chi_para_lmfp: {chi_para_lmfp_no_wbar/(wd_bar4_1**(1/4)):.3e} chi_para_smfp: {chi_para_smfp:.3e}, chi_para: {(chi_para_smfp*chi_para_lmfp_no_wbar/(chi_para_lmfp_no_wbar+chi_para_smfp*wd_bar4_1**(1/4))):3e}")
+                    else:
+                        print("           ",i,f" wd_bar_1: {wd_bar4_1**(1/4):.3e} wd_bar_2: {wd_bar4_2**(1/4):.3e} wd_bar_3: {wd_bar4_3**(1/4):.3e} wd_bar_4: {wd_bar4_4**(1/4):.3e} wd_bar_5: {wd_bar4_5**(1/4):.3e} chi_para_lmfp: {chi_para_lmfp_no_wbar/(wd_bar4_1**(1/4)):.3e} chi_para_smfp: {chi_para_smfp:.3e}")
+            print(f"Old, exact soln = {dconxr_m_n.Wc_self_consistent.values:.3e}, Old, exact cylindrical solution = {dconxr_m_n.WcR_no_w.values**(4/3):.3e}")
+
+    return np.nan
+
 #def get_wd_self_consistent(dconxr,verbose=False):
 #    dconxr.Wc_no_w #these are Wc_bar without w_mar
 #    w_C_Bar=Wc_Bar_prefac*(w_mar**(1/4))   
@@ -1630,9 +1691,14 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
                         xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True)
                         if not np.isnan(nancheck):
                             plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, Dnc={dconxr_n_m.Dnc.values}, Wd")
-                        xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True,min_C_Bar_opt=True)
-                        if not np.isnan(nancheck):
+                        xs,ys,nancheck2=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True,min_C_Bar_opt=True)
+                        if not np.isnan(nancheck2):
                             plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, minWd")
+                            plt.plot(np.log10(xs),xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefac")
+                            plt.plot(np.log10(xs),1.7*dconxr_n_m.Dnc.values*xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefacComb")
+                            dhs=[Dh_term(xi,dconxr_n_m.Wc_self_consistent.values,1.7,dconxr_n_m.Dh_alt.values,dconxr_n_m.alpha_s_alt.values) for xi in xs]
+                            plt.plot(np.log10(xs),dhs,label="Dh_term")
+                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent),np.log10(dconxr_n_m.X0)],-300,100)
                         plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
                         plt.ylim(-300,20)
                         plt.legend()
@@ -1660,7 +1726,9 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
                             plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, minWd")
                             plt.plot(np.log10(xs),xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefac")
                             plt.plot(np.log10(xs),1.7*dconxr_n_m.Dnc.values*xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefacComb")
-                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent)],-300,100)
+                            dhs=[Dh_term(xi,dconxr_n_m.Wc_self_consistent.values,1.7,dconxr_n_m.Dh_alt.values,dconxr_n_m.alpha_s_alt.values) for xi in xs]
+                            plt.plot(np.log10(xs),dhs,label="Dh_term")
+                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent),np.log10(dconxr_n_m.X0)],-300,100)
                         plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
                         plt.ylim(-300,20)
                         plt.legend()
@@ -1682,7 +1750,9 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
                             plt.plot(np.log10(xs),ys,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}, minWd")
                             plt.plot(np.log10(xs),xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefac")
                             plt.plot(np.log10(xs),1.7*dconxr_n_m.Dnc.values*xs/(xs**2+dconxr_n_m.Wc_self_consistent.values**2*1.7/0.5),label="prefacComb")
-                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent)],-300,100)
+                            dhs=[Dh_term(xi,dconxr_n_m.Wc_self_consistent.values,1.7,dconxr_n_m.Dh_alt.values,dconxr_n_m.alpha_s_alt.values) for xi in xs]
+                            plt.plot(np.log10(xs),dhs,label="Dh_term")
+                            plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent),np.log10(dconxr_n_m.X0)],-300,100)
                         plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
                         plt.ylim(-300,20)
                         plt.legend()
