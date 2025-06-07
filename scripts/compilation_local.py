@@ -12,6 +12,7 @@ import copy
 
 mu0=1.256637061e-6
 
+
 #TO DO:
 #Use Regular Neo and put in order of w_marg (both toroidal and cylindrical w_d cases)
 #Break up terms that lie within regular neo 
