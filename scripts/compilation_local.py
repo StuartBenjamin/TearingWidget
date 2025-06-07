@@ -1293,8 +1293,8 @@ def neo_terms_on_modes_local(dconxr,tok_xr,verbose=False,k1=1.7):
     dconxr=dconxr.assign(ne=0.0*dconxr['Re_DeltaPrime']+replica_data_array_ne)
     dconxr=dconxr.assign(dp_dr=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dp_drs)
     dconxr=dconxr.assign(dp_dr2=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dp_drs2)
-    dconxr=dconxr.assign(dq_dr=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dq_drs)
-    dconxr=dconxr.assign(dq_dr2=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dq_drs2)
+    #dconxr=dconxr.assign(dq_dr=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dq_drs)
+    #dconxr=dconxr.assign(dq_dr2=0.0*dconxr['Re_DeltaPrime']+replica_data_array_dq_drs2)
     dconxr=dconxr.assign(q=0.0*dconxr['Re_DeltaPrime']+replica_data_array_q)
     #Important values
     e=1.60217663e-19
@@ -1303,8 +1303,8 @@ def neo_terms_on_modes_local(dconxr,tok_xr,verbose=False,k1=1.7):
     dconxr=dconxr.assign(Lp=dconxr['p']/dconxr['dp_dr'])
     dconxr=dconxr.assign(Lp_alt=dconxr['p']/dconxr['dp_dr2'])
     dconxr=dconxr.assign(Lp_flux=1.0/(dconxr['p1_on_p']*2.0*dconxr['psifac']))
-    dconxr=dconxr.assign(Lq=dconxr['q']/dconxr['dq_dr'])
-    dconxr=dconxr.assign(Lq_alt=dconxr['q']/dconxr['dq_dr2'])
+    #dconxr=dconxr.assign(Lq=dconxr['q']/dconxr['dq_dr'])
+    #dconxr=dconxr.assign(Lq_alt=dconxr['q']/dconxr['dq_dr2'])
     dconxr=dconxr.assign(eps_local=dconxr['r']/dconxr['R']) 
     dconxr=dconxr.assign(pe=dconxr['Te_Kev']*1e3*dconxr['ne']*e)
     dconxr=dconxr.assign(Beta_pe=2*mu0*dconxr['pe']/(dconxr['Bpol']**2))
@@ -1473,6 +1473,11 @@ def wd_alt(dconxr,tok_xr,verbose=False,Zeff=1.5,temp_chi_perp=0.0,reducedm=0,red
     if temp_chi_perp !=0.0:
         chi_perp=temp_chi_perp
 
+    q_radii_spln=CubicSpline(dconxr.Avg_minor_rs[0].values,dconxr.qs[0].values)
+    dq_dr_values=[q_radii_spln(i,1) for i in dconxr.Avg_minor_rs[0].values]
+    rdial_MRE_shear_s_values=dconxr.Avg_minor_rs[0].values*np.array(dq_dr_values)/dconxr.qs[0].values #r_dq_dr_on_q_values
+    
+
     dconxr=dconxr.assign(lnLamb_ei = 15.2-0.5*np.log(dconxr['ne']/1e20)+np.log(dconxr['Te_Kev']))
     dconxr=dconxr.assign(taue_ei=1.09*(10**16)*(dconxr['Te_Kev']**(3/2))/(dconxr['ne']*dconxr['lnLamb_ei'])) #in seconds
     dconxr=dconxr.assign(chi_para_smfp=1.581*dconxr['taue_ei']*dconxr['v_te']**2/(1+0.2535*tok_xr['z_effective'][0]))
@@ -1481,9 +1486,19 @@ def wd_alt(dconxr,tok_xr,verbose=False,Zeff=1.5,temp_chi_perp=0.0,reducedm=0,red
     dconxr=dconxr.assign(chi_para_lmfp_no_wbar=2*R0*dconxr['v_te']*dconxr['psifac']/(np.sqrt(np.pi)*dconxr['n']*dconxr['flux_MRE_shear_s'])) #Divide by wbar to get chi_parallel_lmfp
     
     Wc_prefacs_spln=CubicSpline(dconxr.psifacs[0].values,dconxr.Wc_prefacs[0].values) #Mult by chifrac, div by m^2 to get thing inside ()**(1/4)
+    radial_MRE_shear_s_spln=CubicSpline(dconxr.psifacs[0].values,rdial_MRE_shear_s_values)
 
     temp_data_array=dconxr.Re_DeltaPrime.copy(deep=True)
     temp_data_array2=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array3=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array4=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array5=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array6=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array7=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array8=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array9=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array10=dconxr.Re_DeltaPrime.copy(deep=True)
+    temp_data_array11=dconxr.Re_DeltaPrime.copy(deep=True)
     for n in dconxr.n.values:
         for m in dconxr.m.values:
             if reducedm!=0 and m!=reducedm:
@@ -1495,9 +1510,11 @@ def wd_alt(dconxr,tok_xr,verbose=False,Zeff=1.5,temp_chi_perp=0.0,reducedm=0,red
             chi_para_lmfp_no_wbar=dconxr_m_n.chi_para_lmfp_no_wbar.values
 
             Wc_prefac=Wc_prefacs_spln(dconxr_m_n.psifac.values)
+            radial_MRE_shear_s=radial_MRE_shear_s_spln(dconxr_m_n.psifac.values)
+
             wd_bar_to_power_of_4_no_chifrac_full=(1/psio)**4*Wc_prefac/(dconxr_m_n.m.values**2)
             wd_bar_to_power_of_4_no_chifrac_fitz=(2*np.sqrt(8))**4*(1/(dconxr_m_n.eps_local.values*2.0*dconxr_m_n.flux_MRE_shear_s.values*dconxr_m_n.n.values)**(2))
-            wd_bar_to_power_of_4_no_chifrac_fitz_all_radial=(np.sqrt(8))**4*(1/(dconxr_m_n.eps_local.values*(dconxr_m_n.r.values/dconxr_m_n.Lq)*dconxr_m_n.n.values)**(2))
+            wd_bar_to_power_of_4_no_chifrac_fitz_all_radial=(np.sqrt(8))**4*(1/(dconxr_m_n.eps_local.values*(radial_MRE_shear_s)*dconxr_m_n.n.values)**(2))
             wd_bar_start=dconxr_m_n.X0.values**4
             wd_bar4_1=wd_bar_start #wd_bar_1: full geometry,               full chi_parallel
             wd_bar4_2=wd_bar_start #wd_bar_2: Fitz geometry (flux space),  full chi_parallel
@@ -1519,8 +1536,39 @@ def wd_alt(dconxr,tok_xr,verbose=False,Zeff=1.5,temp_chi_perp=0.0,reducedm=0,red
                     else:
                         print("           ",i,f" wd_bar_1: {wd_bar4_1**(1/4):.3e} wd_bar_2: {wd_bar4_2**(1/4):.3e} wd_bar_3: {wd_bar4_3**(1/4):.3e} wd_bar_4: {wd_bar4_4**(1/4):.3e} wd_bar_5: {wd_bar4_5**(1/4):.3e} chi_para_lmfp: {chi_para_lmfp_no_wbar/(wd_bar4_1**(1/4)):.3e} chi_para_smfp: {chi_para_smfp:.3e}")
             print(f"Old, exact soln = {dconxr_m_n.Wc_self_consistent.values:.3e}, Old, exact cylindrical solution = {dconxr_m_n.WcR_no_w.values**(4/3):.3e}")
+            temp_data_array.loc[dict(n=n,m=m)]=wd_bar4_1**(1/4)
+            temp_data_array2.loc[dict(n=n,m=m)]=wd_bar4_2**(1/4)
+            temp_data_array3.loc[dict(n=n,m=m)]=wd_bar4_3**(1/4)
+            temp_data_array4.loc[dict(n=n,m=m)]=wd_bar4_4**(1/4)
+            temp_data_array5.loc[dict(n=n,m=m)]=wd_bar4_5**(1/4)
+            temp_data_array6.loc[dict(n=n,m=m)]=chi_para_lmfp_no_wbar/(wd_bar4_1**(1/4))
+            temp_data_array7.loc[dict(n=n,m=m)]=chi_para_smfp
+            temp_data_array8.loc[dict(n=n,m=m)]=(chi_para_smfp*chi_para_lmfp_no_wbar/(chi_para_lmfp_no_wbar+chi_para_smfp*wd_bar4_1**(1/4)))
+            temp_data_array9.loc[dict(n=n,m=m)]=Dh_term(0.000000001,wd_bar4_3**(1/4),1.7,dconxr_m_n.Dh_alt.values,dconxr_m_n.alpha_s_alt.values)
+            temp_data_array10.loc[dict(n=n,m=m)]=np.sqrt(2*np.pi**3)*dconxr_m_n.Dr.values/(wd_bar4_5**(1/4))
+            temp_data_array11.loc[dict(n=n,m=m)]=radial_MRE_shear_s
 
-    return np.nan
+    dconxr=dconxr.assign(Wc_no_w_1=temp_data_array)
+    dconxr=dconxr.assign(Wc_no_w_2=temp_data_array2)
+    dconxr=dconxr.assign(Wc_no_w_3=temp_data_array3)
+    dconxr=dconxr.assign(Wc_no_w_4=temp_data_array4)
+    dconxr=dconxr.assign(Wc_no_w_5=temp_data_array5)
+    dconxr=dconxr.assign(chi_para_lmfp=temp_data_array6)
+    dconxr=dconxr.assign(chi_para_smfp=temp_data_array7)
+    dconxr=dconxr.assign(chi_para_combined=temp_data_array8)
+    dconxr=dconxr.assign(Delta_crit_Hegna=temp_data_array9)
+    dconxr=dconxr.assign(Delta_crit_Fitz=temp_data_array10)
+    dconxr=dconxr.assign(radial_MRE_shear_s=temp_data_array11)
+
+    return dconxr
+
+#2/1 DP: [-5.532296 , -4.26593  , -3.587777 , -2.656199 , -0.4393001]
+#Hegna:  [-0.3613533 , -0.36763342, -0.37547656, -0.38487025, -0.3980369]
+#Fitz: [-11.05276037, -11.24190289, -11.47009784, -11.72316931, -12.0579614]
+
+#3/2 DP: [-6.666252, -5.012189, -4.777074, -2.053869, -0.110238]
+#Hegna: [-0.59588398, -0.64138239, -0.70146619, -0.77684412, -0.88364896]
+#Fitz: [-14.80743536, -15.6859771 , -16.77813371, -18.03019784, -19.64157993]
 
 #def get_wd_self_consistent(dconxr,verbose=False):
 #    dconxr.Wc_no_w #these are Wc_bar without w_mar
@@ -1640,7 +1688,7 @@ def MRE_haye_2017(dcon_xr):
     #dcon_xr=dcon_xr.assign(HAYE_MRE_shear_s=2.0*dcon_xr['psifac']*dcon_xr['q1_on_q'])
     dcon_xr=dcon_xr.assign(flux_MRE_shear_s=dcon_xr['psifac']*dcon_xr['q1_on_q'])
     #dcon_xr=dcon_xr.assign(HAYE_MRE_c1=3*(dcon_xr['Jboot_dot_B']/dcon_xr['JdotB'])/dcon_xr['HAYE_MRE_shear_s'])
-    dcon_xr=dcon_xr.assign(HAYE_MRE_c1=3*(np.abs(0.4*(1000)*dcon_xr['Jboot_dot_B']/(dcon_xr['Avg_Btot']*dcon_xr['Jpara'])))/dcon_xr['flux_MRE_shear_s'])
+    dcon_xr=dcon_xr.assign(HAYE_MRE_c1=3*(np.abs(0.4/(np.sqrt(mu0))*dcon_xr['Jboot_dot_B']/(dcon_xr['Avg_Btot']*dcon_xr['Jpara'])))/dcon_xr['flux_MRE_shear_s'])
     #Term 1: 1/w_normalised (flux space)
     #Term 2: 1/w_normalised^3 (flux space)
     #Term 3: 1/w_normalised (flux space)
@@ -1650,15 +1698,45 @@ def MRE_haye_2017(dcon_xr):
 def dWdtau_MRE_haye_2017(w_mar,DeltaPrimeDimless,Di,alpha_l_alt,HAYE_MRE_c1,HAYE_MRE_term2,HAYE_MRE_term3=0.0):
     return (deltaPrime_bar(w_mar,DeltaPrimeDimless,Di,alpha_l_alt)+HAYE_MRE_c1/w_mar+HAYE_MRE_c1*HAYE_MRE_term2/(w_mar**3)+HAYE_MRE_c1*HAYE_MRE_term3/w_mar)
 
-def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
+def plot_marg_width_haye_2017(dconxr_n_m,use_tok_vals=True):
+    wc_bar_vals=np.logspace(-8,0,num=1000)
+    if use_tok_vals:
+        dwdtau_loc = lambda w_mar: dWdtau_MRE_haye_2017(w_mar,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Di.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.HAYE_MRE_c1_tokamaker.values,dconxr_n_m.HAYE_MRE_term2.values)
+        dwdtau_vals=dwdtau_loc(wc_bar_vals)
+    else:
+        dwdtau_loc = lambda w_mar: dWdtau_MRE_haye_2017(w_mar,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Di.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.dconxr_n_m.HAYE_MRE_c1.values,dconxr_n_m.HAYE_MRE_term2.values)
+        dwdtau_vals=dwdtau_loc(wc_bar_vals)
+    return wc_bar_vals,dwdtau_vals
+
+def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0,cd_efficiency=5*10**-1,use_tok_vals=True):
     dconxr=MRE_haye_2017(dconxr)
 
+    if use_tok_vals:
+        jbs_spln=CubicSpline(dconxr.psi.values,dconxr.j_bootstrap.values)
+        jind_spln=CubicSpline(dconxr.psi.values,dconxr.j_inductive.values)
+        jtor_spln=CubicSpline(dconxr.psi.values,dconxr.j_tor.values)
+
+    replica_data_array00=dconxr.Re_DeltaPrime.copy()
+    replica_data_array01=dconxr.Re_DeltaPrime.copy()
+    replica_data_array02=dconxr.Re_DeltaPrime.copy()
+    replica_data_array02b=dconxr.Re_DeltaPrime.copy() #HAYE_MRE_c1
+    replica_data_array03=dconxr.Re_DeltaPrime.copy()
+    replica_data_array04=dconxr.Re_DeltaPrime.copy()
     replica_data_array1=dconxr.Re_DeltaPrime.copy()
     replica_data_array2=dconxr.Re_DeltaPrime.copy()
     replica_data_array3=dconxr.Re_DeltaPrime.copy()
     replica_data_array4=dconxr.Re_DeltaPrime.copy()
     replica_data_array5=dconxr.Re_DeltaPrime.copy()
     replica_data_array6=dconxr.Re_DeltaPrime.copy()
+    replica_data_array7=dconxr.Re_DeltaPrime.copy()
+    replica_data_array8=dconxr.Re_DeltaPrime.copy()
+    replica_data_array9=dconxr.Re_DeltaPrime.copy()
+    replica_data_array10=dconxr.Re_DeltaPrime.copy()
+    replica_data_array11=dconxr.Re_DeltaPrime.copy()
+    replica_data_array12=dconxr.Re_DeltaPrime.copy()
+
+    redge=dconxr.Avg_minor_rs[0].values[-1]
+    dconxr=dconxr.assign(lnLamb_ei = 15.2-0.5*np.log(dconxr['ne']/1e20)+np.log(dconxr['Te_Kev']))
 
     wc_bar_vals=np.logspace(-8,0,num=1000)
     for n in dconxr.n.values:
@@ -1671,6 +1749,24 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
             replica_data_array4.loc[dict(n=n,m=m)]=np.nan #jcd_on_jbs
             replica_data_array5.loc[dict(n=n,m=m)]=np.nan #jcd_on_jparallel
             replica_data_array6.loc[dict(n=n,m=m)]=np.nan #jcd
+            replica_data_array7.loc[dict(n=n,m=m)]=np.nan #island width in [m]
+            replica_data_array8.loc[dict(n=n,m=m)]=np.nan #island area in [m^2]
+            replica_data_array9.loc[dict(n=n,m=m)]=np.nan #total current deposited in island in [A]
+            replica_data_array10.loc[dict(n=n,m=m)]=np.nan #Current drive current conversion factor
+            replica_data_array11.loc[dict(n=n,m=m)]=np.nan #Total power requirement for CD in [W]
+            replica_data_array12.loc[dict(n=n,m=m)]=np.nan #Current drive efficiency (See Wesson Tokamaks Fig. 3.14.2)
+
+            if use_tok_vals:
+                jbs_tok=jbs_spln(dconxr_n_m.psifac.values)
+                jind_tok=jind_spln(dconxr_n_m.psifac.values)
+                jtor_tok=jtor_spln(dconxr_n_m.psifac.values)
+
+                HAYE_MRE_c1=np.abs(3*(jbs_tok/jtor_tok)/dconxr_n_m.flux_MRE_shear_s.values)
+
+                replica_data_array00.loc[dict(n=n,m=m)]=jbs_tok
+                replica_data_array01.loc[dict(n=n,m=m)]=jind_tok
+                replica_data_array02.loc[dict(n=n,m=m)]=jtor_tok
+                replica_data_array02b.loc[dict(n=n,m=m)]=HAYE_MRE_c1
 
             if np.isnan(dconxr_n_m.Re_DeltaPrime.values) or np.isnan(dconxr_n_m.Di.values) or np.isnan(dconxr_n_m.alpha_l_alt.values) or np.isnan(dconxr_n_m.HAYE_MRE_c1.values) or np.isnan(dconxr_n_m.HAYE_MRE_term2.values):
                 continue
@@ -1678,11 +1774,15 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
             if dconxr_n_m.Re_DeltaPrime.values>0:
                 continue
 
-            if dconxr_n_m.Di.values>0 or dconxr_n_m.Dr.values>0:
+            if dconxr_n_m.Di.values>0 or dconxr_n_m.Dr.values>0 or dconxr_n_m.flux_MRE_shear_s.values<0:
                 continue
 
-            dwdtau_loc = lambda w_mar: dWdtau_MRE_haye_2017(w_mar,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Di.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.HAYE_MRE_c1.values,dconxr_n_m.HAYE_MRE_term2.values)
-            dwdtau_vals=dwdtau_loc(wc_bar_vals)
+            if use_tok_vals:
+                dwdtau_loc = lambda w_mar: dWdtau_MRE_haye_2017(w_mar,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Di.values,dconxr_n_m.alpha_l_alt.values,HAYE_MRE_c1,dconxr_n_m.HAYE_MRE_term2.values)
+                dwdtau_vals=dwdtau_loc(wc_bar_vals)
+            else:
+                dwdtau_loc = lambda w_mar: dWdtau_MRE_haye_2017(w_mar,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Di.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.HAYE_MRE_c1.values,dconxr_n_m.HAYE_MRE_term2.values)
+                dwdtau_vals=dwdtau_loc(wc_bar_vals) 
 
             if max(dwdtau_vals)<0:
                 replica_data_array1.loc[dict(n=n,m=m)]=1.0
@@ -1710,13 +1810,13 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
             if dwdtau_vals[0]>0:
                 replica_data_array1.loc[dict(n=n,m=m)]=np.nan
             else:
-                replica_data_array1.loc[dict(n=n,m=m)]==dwdtau_spln.roots(extrapolate=False)[0]
+                replica_data_array1.loc[dict(n=n,m=m)]=dwdtau_spln.roots(extrapolate=False)[0]
 
             #Solving for CD stabilisation:
             try:
                 haye_2017_max_location=dwdtau_deriv_spln.roots(extrapolate=False)[0]
                 if verbose: 
-                    print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+                    print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values}||{HAYE_MRE_c1},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
                     if mchoose!=0 and m==mchoose:
                         xs,ys,nancheck=solve_marg_width(dconxr_n_m.Wc_no_w.values,dconxr_n_m.Re_DeltaPrime.values,dconxr_n_m.Dh_alt.values,dconxr_n_m.Di.values,dconxr_n_m.Dnc.values,dconxr_n_m.alpha_l_alt.values,dconxr_n_m.alpha_s_alt.values,plot=True)
                         if not np.isnan(nancheck):
@@ -1734,9 +1834,9 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
                         plt.legend()
             except:
                 print('cat')
-                print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+                print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values}||{HAYE_MRE_c1},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
                 plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
-                plt.ylim(-300,20)
+                #plt.ylim(-300,20)
                 plt.legend()
                 haye_2017_max_location=dwdtau_deriv_spln.roots(extrapolate=False)[0]
                 if verbose: 
@@ -1754,22 +1854,37 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
                             plt.plot(np.log10(xs),dhs,label="Dh_term")
                             plt.vlines([np.log10(dconxr_n_m.Wc_self_consistent),np.log10(dconxr_n_m.X0)],-300,100)
                         plt.plot(np.log10(wc_bar_vals),dwdtau_vals,label=f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values}")
-                        plt.ylim(-300,20)
+                        #plt.ylim(-300,20)
                         plt.legend()
                 
             haye_2017_max=dwdtau_loc(haye_2017_max_location)
             replica_data_array2.loc[dict(n=n,m=m)]=haye_2017_max_location
             replica_data_array3.loc[dict(n=n,m=m)]=haye_2017_max
-
-            if haye_2017_max>0: #rare case that its not
-                if verbose: print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
+            
+            r=dconxr_n_m.r.values
+            island_width_in_m=redge*haye_2017_max_location/(2*np.sqrt(dconxr_n_m.psifac.values))
+            island_cross_sec_area=2*np.pi*r*island_width_in_m #Area
+            replica_data_array7.loc[dict(n=n,m=m)]=island_width_in_m 
+            replica_data_array8.loc[dict(n=n,m=m)]=island_cross_sec_area
+            
+            cd_power_conversion_factor=dconxr_n_m.R.values*(dconxr_n_m.ne.values/(1e20))*dconxr_n_m.lnLamb_ei.values/dconxr_n_m.Te_Kev.values
+            replica_data_array10.loc[dict(n=n,m=m)]=cd_power_conversion_factor
+            replica_data_array12.loc[dict(n=n,m=m)]=cd_efficiency
+            
+            if haye_2017_max>0: #it's a rare case that its not positive
+                if verbose: print(f"n={n},m={m},Dp={dconxr_n_m.Re_DeltaPrime.values},Di={dconxr_n_m.Di.values},alpha_l_alt={dconxr_n_m.alpha_l_alt.values},HAYE_MRE_c1={dconxr_n_m.HAYE_MRE_c1.values}||{HAYE_MRE_c1},HAYE_MRE_term2={dconxr_n_m.HAYE_MRE_term2.values},MRE_shear_s={dconxr_n_m.flux_MRE_shear_s.values},Jboot_dot_B={dconxr_n_m.Jboot_dot_B.values}")
                 jcd_on_jbs=haye_2017_max*haye_2017_max_location/(CDK1*dconxr_n_m.HAYE_MRE_c1.values)
                 jcd_on_jparallel=jcd_on_jbs*(np.abs(dconxr_n_m['Jboot_dot_B']/(dconxr_n_m['Avg_Btot']*dconxr_n_m['Jpara'])))
                 jcd=jcd_on_jparallel*np.abs(dconxr_n_m.Jpara.values)
+                if use_tok_vals:
+                    jcd_on_jbs=haye_2017_max*haye_2017_max_location/(CDK1*HAYE_MRE_c1)
+                    jcd_on_jparallel=jcd_on_jbs*jbs_tok/jtor_tok
+                    jcd=jcd_on_jparallel*jtor_tok
                 replica_data_array4.loc[dict(n=n,m=m)]=jcd_on_jbs
                 replica_data_array5.loc[dict(n=n,m=m)]=jcd_on_jparallel
                 replica_data_array6.loc[dict(n=n,m=m)]=jcd
-
+                replica_data_array9.loc[dict(n=n,m=m)]=jcd*island_cross_sec_area #Total current deposited in island
+                replica_data_array11.loc[dict(n=n,m=m)]=cd_power_conversion_factor*jcd*island_cross_sec_area/cd_efficiency #Total power requirement for CD in [W]
             
     dconxr=dconxr.assign(w_marg_haye_2017=0.0*dconxr['Re_DeltaPrime']+replica_data_array1)
     dconxr=dconxr.assign(haye_2017_max_location=0.0*dconxr['Re_DeltaPrime']+replica_data_array2)
@@ -1777,6 +1892,18 @@ def solve_marg_width_haye_2017(dconxr,CDK1=0.5,verbose=False,mchoose=0):
     dconxr=dconxr.assign(jcd_on_jbs=0.0*dconxr['Re_DeltaPrime']+replica_data_array4)
     dconxr=dconxr.assign(jcd_on_jparallel=0.0*dconxr['Re_DeltaPrime']+replica_data_array5)
     dconxr=dconxr.assign(jcd=0.0*dconxr['Re_DeltaPrime']+replica_data_array6)
+    dconxr=dconxr.assign(Haye_cd_island_width_in_m=0.0*dconxr['Re_DeltaPrime']+replica_data_array7)
+    dconxr=dconxr.assign(Haye_cd_island_area_in_m2=0.0*dconxr['Re_DeltaPrime']+replica_data_array8)
+    dconxr=dconxr.assign(total_current_deposited_in_island_A=0.0*dconxr['Re_DeltaPrime']+replica_data_array9)
+    dconxr=dconxr.assign(cd_power_conversion_factor=0.0*dconxr['Re_DeltaPrime']+replica_data_array10)
+    dconxr=dconxr.assign(total_power_requirement_for_CD_W=0.0*dconxr['Re_DeltaPrime']+replica_data_array11)
+    dconxr=dconxr.assign(cd_efficiency=0.0*dconxr['Re_DeltaPrime']+replica_data_array12)
+
+    if use_tok_vals:
+        dconxr=dconxr.assign(jbs_tokamaker=replica_data_array00)
+        dconxr=dconxr.assign(jind_tokamaker=replica_data_array01)
+        dconxr=dconxr.assign(jtor_tokamaker=replica_data_array02)
+        dconxr=dconxr.assign(HAYE_MRE_c1_tokamaker=replica_data_array02b)
 
     return dconxr
 
@@ -1807,7 +1934,7 @@ def cross_section_surf_int(local_tok_xr,vals_to_int): #Not very reliable... to b
     return cross_section_surf_int_of_vals
 
 #w_mar is dimless here!!...
-def solve_marg_width(Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0=0.8227,k1=1.7,plot=False,min_C_Bar_opt=False):
+def solve_marg_width(Wc_Bar_prefac,DeltaPrimeDimless,Dh_alt,Di,Dnc,alpha_l_alt,alpha_s_alt,k0=0.8227,k1=1.7,plot=False,min_C_Bar_opt=True):
     #wc_bar_vals=np.linspace(1e-8,0.4,1000)
     wc_bar_vals=np.logspace(-8,0,num=1000)
     if min_C_Bar_opt:
@@ -1851,7 +1978,7 @@ def deltaPrime_bar(w_mar,DeltaPrimeDimless,Di,alpha_l_alt):
 def Dh_term(w_mar,w_C_Bar,k1,Dh_alt,alpha_s_alt):
     return k1*Dh_alt/(w_mar+w_C_Bar*k1/(0.3*(1+alpha_s_alt)))
 
- #Whole thing w^-1
+#Whole thing w^-1
 def Dnc_term(w_mar,w_C_Bar,k1,Dnc):
     return k1*Dnc*w_mar/(w_mar**2+(w_C_Bar**2)*k1/0.5)
 
