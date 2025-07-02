@@ -16,7 +16,7 @@ if not debug:
         tot_cases=int(sys.argv[2])
         cases_in_batch=int(sys.argv[3])
 else:
-    studyname='cust_test'
+    studyname='ran_test'
     array_id='1'
     tot_cases=2000
     cases_in_batch=5
