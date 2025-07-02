@@ -597,6 +597,18 @@ def plot_Jbs(mygs,J_BS,point,psi_pad=1.E-6):
     return fig, ax
 
 #untested but simple
+#OKAY so I can get f_tr from mygs!!! Can also get <B> (modb_avgs), and qvals
+#   So I just need flux_surf_avg_of_B_timesj_BS out of sauter_bootstrap
+#       Confirm they are calculating 
+#What about J_bs, flux_surf_avg_of_B_timesj_BS3
+#qvals3 is fine, f_tr3 is fine
+
+#I need:
+#On the psi grid:::
+#   flux_surf_avg_of_B_timesj_BS (raw ouput of out of sauter_bootstrap from omfit_classes.utils_fusion)
+#   j_BS, inductive j_tor (sum of which is equal to plasma profile)
+# Then, with mygs I can calculate f_tr, qvals and J_tot_true3.
+#   Also, good to make sure we know how to get the inputs used in sauter_bootstrap function
 def Tokamaker_get_Jtorr_and_f_tr(mygs,npsi):
     _,f,fp,_,pp = mygs.get_profiles(npsi=npsi,psi_pad=1.E-4)
     _,_,ravgs,_,_,_ = mygs.get_q(npsi=npsi,psi_pad=1.E-4) # get flux averaged R and 1/R from equilibrium solution
@@ -611,6 +623,10 @@ def Tokamaker_get_Jtorr_and_f_tr(mygs,npsi):
 
     tkmkr_jtor = R_avg * pp + one_over_R_avg*(f*fp) / mu0 # Jtor = R*P' + FF' / (mu0*R)
     return tkmkr_jtor,(1-fc) #second output is trapped fraction
+
+def Tokamaker_get_f_tr(mygs,npsi):
+    _,fc,_,_ = mygs.sauter_fc(npsi=npsi,psi_pad=1.E-4) #fc is passing fraction
+    return fc
 
 #tested
 def coil_sets(rscle,zscle,coil_set=3):
@@ -850,7 +866,7 @@ def gen_n_successful_cases(n,out_path="dset",return_total=True,save=True,save_eq
     #Luckily main files just in out_path
     #for i in range(1,total_batches+1):
 
-def run_dcon_on_equilibria(out_path,dcon_executable,rdcon_executable,n=0,cases_in_batch=0,**kwargs):
+def run_dcon_on_equilibria(out_path,dcon_executable,rdcon_executable,n=0,cases_in_batch=0,just_profs=False,**kwargs):
     if not os.path.isfile(out_path+"/run_numbers.csv") and n==0 and cases_in_batch==0:
         raise "Need to specify n, cases_in_batch. gen_n_successful_cases didn't write them."
     elif os.path.isfile(out_path+"/run_numbers.csv"):
@@ -875,6 +891,7 @@ def run_dcon_on_equilibria(out_path,dcon_executable,rdcon_executable,n=0,cases_i
 
     read_write_dir_vec = []
 
+    print("Total batches to run DCON on: ",total_batches)
     for i in range(1,total_batches+1):
         tokamaker_xr_name=out_path+f"/tokamak_xr_{i}of{total_batches}"
         eqdsk_dir_name=out_path+f"/eqdsks_b{i}of{total_batches}"
@@ -887,22 +904,36 @@ def run_dcon_on_equilibria(out_path,dcon_executable,rdcon_executable,n=0,cases_i
                 os.mkdir(dcon_dir_name)
             read_write_dir_vec.append([eqdsk_dir_name,dcon_dir_name])
         else:
+            print("Skipp ", eqdsk_dir_name, tokamaker_xr_name)
             break
+
+
+    print("Number of directories to run DCON on: ",len(read_write_dir_vec))
             
     for i in read_write_dir_vec:
         equil_names = os.listdir(i[0])
         if len(equil_names)>0:
             for j in equil_names:
-                if not (os.path.isfile(i[1]+"/"+j+"_dcon_xr") or os.path.isfile(i[1]+"/"+j+"_dcon_xrF")):
+                if not just_profs:
+                    if (os.path.isfile(i[1]+"/"+j+"_dcon_xr") or os.path.isfile(i[1]+"/"+j+"_dcon_xrF")):
+                        print("dcon already run on equilibrium file: ",i[0]+"/"+j)
+                        continue
+                else:
+                    if (os.path.isfile(i[1]+"/"+j+"_dconPROF_xr") or os.path.isfile(i[1]+"/"+j+"_dcon_xrF")):
+                        print("dcon already run on equilibrium file: ",i[0]+"/"+j)
+                        continue
                     #equil_directory.append([i+"/"+j,i]) #filename, directory
                     print("running dcon on equilibrium file: ",i[0]+"/"+j)
                     try:
                         dcon_ran,rdcon_ran,MRE_xr=run_DCON_on_equilibrium2(i[0]+"/"+j,
                                 working_dir=working_dir,dcon_executable=dcon_executable,
-                                rdcon_executable=rdcon_executable,
+                                rdcon_executable=rdcon_executable,just_profs=just_profs,
                                 **kwargs)
                         if dcon_ran:
-                            MRE_xr.to_netcdf(path=i[1]+"/"+j+"_dcon_xr",engine="scipy")
+                            if just_profs:
+                                MRE_xr.to_netcdf(path=i[1]+"/"+j+"_dconPROF_xr",engine="scipy")
+                            else:
+                                MRE_xr.to_netcdf(path=i[1]+"/"+j+"_dcon_xr",engine="scipy")
                             #ideal_xr.to_netcdf(path=i[1]+"/"+j+"_ideal_xr",engine="scipy")
                         #if rdcon_ran:
                         #    DP_xr.to_netcdf(path=i[1]+"/"+j+"_DP_xr",engine="scipy")
@@ -912,6 +943,7 @@ def run_dcon_on_equilibria(out_path,dcon_executable,rdcon_executable,n=0,cases_i
                             f__0.write(f'{str(dcon_ran)},{str(rdcon_ran)}\n')
                             f__0.close()
                     except:
+                        print("dcon run failed on equilibrium file: ",i[0]+"/"+j)
                         f__0=open(i[1]+"/"+j+"_dcon_xrF", 'w')
                         f__0.write('dcon_ran,rdcon_ran\n')
                         f__0.write(f'{str(-123454321)},{str(-123454321)}\n')
@@ -1045,6 +1077,12 @@ def _gen_n_successful_cases(n,out_path="dset",return_total=True,save=True,save_e
                             save_equil=save_equil, run_phys_suite=run_phys_suite, 
                             verbose=False,lcfs_pad=1e-6,ttol=1e-14, 
                             just_dynamo=just_dynamo,**kwargs)
+                    #j_BS3
+                    #flux_surf_avg_of_B_timesj_BS3
+                    #jtor_total3
+                    #J_tot_true3
+                    #f_tr3
+                    #qvals3
                     if run_phys_suite:
                         dcon_ran1=False
                         rdcon_ran3=False

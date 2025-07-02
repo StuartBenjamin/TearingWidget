@@ -232,8 +232,8 @@ def run_DCON_on_equilibrium(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,w
 """
     
 #THIS IS THE ONE I'M GOING TO USE
-def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,working_dir='',dcon_executable='',rdcon_executable='',
-                                verbose=False, eq_type="""'efit_tokamaker'""",grid_type_diagnose="""'ldp'""",mtheta=1024,mpsi=512,mpsi_diagnose=1024,psi_search_range=0.02,psihigh=0.9999,nmin=1,nmax=4,rdcon_nlim=100,**kwargs):
+def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,working_dir='',dcon_executable='',rdcon_executable='',stride_executable='',tol_diagnose=1e-10,run_stride=False,nx=256,jac_type="""'hamada'""",
+                                gal_xmin_flag='t',run_rdcon_override=True,psilow=1e-4,RDCONregrid_flag='t',sas_flag='f',qhigh=1e3,just_profs=False,verbose=False, eq_type="""'efit_tokamaker'""",grid_type_diagnose="""'ldp'""",mtheta=1024,mpsi=512,mpsi_diagnose=1024,psi_search_range=0.02,psihigh=0.9999,nmin=1,nmax=4,rdcon_nlim=100,**kwargs):
     if len(working_dir)>0:
         os.chdir(working_dir)
 
