@@ -249,15 +249,22 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
         if os.path.isfile(working_dir+"/rdcon"):
             os.remove(working_dir+"/rdcon")
         shutil.copy(rdcon_executable,working_dir)
+    if run_stride:
+        if len(stride_executable)>0:
+            if os.path.isfile(working_dir+"/stride"):
+                os.remove(working_dir+"/stride")
+            shutil.copy(stride_executable,working_dir)
     assert os.path.isfile(working_dir+'/dcon')
     assert os.path.isfile(working_dir+'/rdcon')
+    if run_stride:
+        assert os.path.isfile(working_dir+'/stride')
 
     #Starting with a run to extract surface terms only..., this very quick (2s)
     #If it fails, returns instantly
     write_dcon_inputs(working_dir,eq_filename,
         nn=1,
         mpsi=256,
-        etol=1e-10,
+        etol=1e-9,
         mtheta=512,
         psihigh=0.995,
         gse_err_logtol=1, #inactive
@@ -277,6 +284,8 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
         gse_flag='f',
         grid_type="""'ldp'""",
         psilow=1e-4,
+        eq_type=eq_type,
+        jac_type=jac_type,
         **kwargs)
     os.chdir(working_dir)
     dcon_run_surf = subprocess.call(working_dir+'/dcon')
@@ -287,12 +296,27 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
         equil_dat_xr=prof_dat_xr=edge_dat_xr=gse_dat_xr=MRE_xr=None
         return False,False,None#,None,None
     #reading dcon profile data, equilibrium data
+    equil_mn_dat_xr = pd.read_csv(working_dir+'/equil_mn_dat.csv').to_xarray()
+    print("equil_mn_dat_xr",equil_mn_dat_xr)
+    if qlow>1 and equil_mn_dat_xr.m.values[1]==1 and equil_mn_dat_xr.m.values[0]==1:
+        sing_start=0
+        #newq0=qlow #AVOID THIS
+        psilow=equil_mn_dat_xr.psifac.values[1]
+        print("applying sing start to skip first surface")
+    else:
+        sing_start=0
     prof_dat_xr = pd.read_csv(working_dir+'/prof_dat.csv', dtype={'ipsis': 'int'}).to_xarray().set_index(index="ipsis").rename({'index': 'ipsis'})#, dtype={'ipsis': 'int'})
     equil_dat_xr = pd.read_csv(working_dir+'/equil_dat.csv', dtype={'mer_pass': 'int'}).to_xarray().squeeze(drop=True)#, dtype={'mer_pass': 'int'})
     equil_dat_xr=equil_dat_xr.assign(rdcon_nlim=rdcon_nlim)
     print(equil_dat_xr)
     mer_pass=equil_dat_xr.mer_pass.values>0
     surf_ran=True
+
+    if just_profs:
+        print("Just running profiles, success!")
+        #save equil_dat_xr and prof_dat_xr
+        equil_dat_xr=equil_dat_xr.merge(prof_dat_xr)
+        return surf_ran,False,equil_dat_xr
 
     #along with surf_ran, ns_dcon_ran and ns_rdcon_ran tell us if dcon/rdcon ran
     ns_dcon_ran = []
@@ -325,10 +349,11 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                 #Two generic printing functions to fix:
                 #   dcon_dat [DONE]
                 #   MRE_dat 
+            print("writing with sas flag",sas_flag)
             write_dcon_inputs(working_dir,eq_filename,
                         nn=i,
                         mpsi=mpsi_diagnose,
-                        etol=1e-10,
+                        etol=tol_diagnose,
                         mtheta=mtheta,
                         psihigh=psihigh,
                         gse_err_logtol=gse_err_logtol,      #caps psihigh to keep error small, logs equil error tolerances
@@ -336,20 +361,21 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                         mat_flag='f',
                         ode_flag='t',                       #true
                         mer_flag='f', 
-                        vac_flag='f',                       #false since running psi_search_range
-                        sas_flag='f', 
+                        vac_flag='t',                       #false since running psi_search_range
+                        sas_flag=sas_flag, 
                         psiedge=1.0,                        #inactive
                         psi_search_range=psi_search_range,  #scans edge for max dW, saves as psilim
                         qlow=qlow,
                         newq0=newq0,
-                        qhigh=1e3,
-                        sing_start=0,
+                        qhigh=qhigh,
                         bin_euler='f',
                         bin_eq_2d='f',
                         gse_flag='f',
                         grid_type=grid_type_diagnose,
                         eq_type=eq_type,
-                        psilow=1e-4,
+                        psilow=psilow,
+                        sing_start=sing_start,
+                        jac_type=jac_type,
                         **kwargs)
             os.chdir(working_dir)
             dcon_run = subprocess.call(working_dir+'/dcon')
@@ -364,12 +390,19 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                 #FIRST RUN SPECIFIC STUFF:
                 psilim=DCON_data_Xr.psilim.values[0]
                 qlow_psi=DCON_data_Xr.qlow_psi.values[0]
+                qlow=DCON_data_Xr.qlow.values[0]
+                qlim= DCON_data_Xr.qlim.values[0]
+                qmax=DCON_data_Xr.qmax.values[0]
+                if sas_flag=='t' and (not qhigh<1e3):
+                    psilim=psihigh
+                    qlim=min(qmax,qhigh)
                 GSE_good = psilim > psihigh-psi_search_range #big gs errors will truncate below the region we're tring to search
 
                 #adding q bound data to equil_dat_xr, how has q<1 & gs error caused the computed region to shrink
                 equil_dat_xr=equil_dat_xr.assign(GSE_good=GSE_good,qlow=DCON_data_Xr.qlow.values[0],qlow_psi=DCON_data_Xr.qlow_psi.values[0],qlow_rho=DCON_data_Xr.qlow_rho.values[0],psilim=DCON_data_Xr.psilim.values[0],qmax=DCON_data_Xr.qmax.values[0])
                 #adding edge dW trace data
-                edge_dat_xr = pd.read_csv(working_dir+'/dW_edge.csv',dtype={'dW_e': 'float', 'q_e': 'float', 'psifac_e': 'float'}).to_xarray().rename({'index': 'edge_index'})
+                if os.path.isfile(working_dir+'/dW_edge.csv'):
+                    edge_dat_xr = pd.read_csv(working_dir+'/dW_edge.csv',dtype={'dW_e': 'float', 'q_e': 'float', 'psifac_e': 'float'}).to_xarray().rename({'index': 'edge_index'})
                 #adding edge gs error psi data
                 gse_dat_xr = pd.read_csv(working_dir+'/gse_psi_tols.csv').to_xarray().rename({'index': 'gse_index'})
 
@@ -379,7 +412,15 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                 dcon_pass=(DCON_data_Xr.dcon_nzero.values[0]==0)
                 free_pass=(DCON_data_Xr.dW_total.values[0]>0)
 
-                if dcon_pass and free_pass:
+                psilow_rdcon=max(qlow_psi,1e-4)
+                psilow_rdcon=max(psilow,psilow_rdcon) 
+                if psilow_rdcon>1e-4:
+                    qlow_str=0.0
+                else:
+                    qlow_str=qlow
+                print('psilow_rdcon',psilow_rdcon)
+                print('qlow_str',qlow_str)
+                if (dcon_pass and free_pass) or run_rdcon_override:
                     print('running RDCON')
                     write_rdcon_inputs(working_dir,eq_filename,
                             nn=i,
@@ -387,7 +428,9 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                             etol=1e-10,
                             mtheta=mtheta,
                             psihigh=psilim,
-                            psilow=max(qlow_psi,1e-4),
+                            qhigh=qlim,
+                            psilow=psilow_rdcon,
+                            qlow_str=qlow_str,
                             dx0=5e-4,
                             cutoff=10, 
                             newq0=newq0,
@@ -395,7 +438,7 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                             bin_delmatch='f',
                             bal_flag='f',
                             ode_flag='f', #false since ran dcon above for this nn
-                            vac_flag='f', #false since ran dcon above for this nn
+                            vac_flag='t', #false since ran dcon above for this nn
                             gal_flag='t', #true
                             dump_MRE_data='f',
                             gse_flag='f', #false, ran once by dcon
@@ -403,6 +446,12 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                             cyl_flag='f',
                             bin_eq_2d='f',
                             eq_type=eq_type,
+                            run_stride=run_stride,
+                            sing_start=sing_start,
+                            nx=nx,
+                            regrid_flag=RDCONregrid_flag,
+                            jac_type=jac_type,   
+                            gal_xmin_flag=gal_xmin_flag,
                             **kwargs)
                     os.chdir(working_dir)
                     rdcon_run = subprocess.call(working_dir+'/rdcon')
@@ -410,30 +459,49 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                         ns_rdcon_ran.append(i)
                         DeltaPrimes_Xr = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime.csv',dtype={'m': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
                         MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
+                        print(DeltaPrimes_Xr.Re_DeltaPrime.values)
+                        print(np.abs(DeltaPrimes_Xr.Im_DeltaPrime.values/DeltaPrimes_Xr.Re_DeltaPrime.values))
+                    if run_stride:
+                        stride_run = subprocess.run(working_dir+"/stride")
+                        if stride_run.returncode==0:
+                            DeltaPrimes_Xr_Str = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime_S.csv',dtype={'m': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
+                            print(DeltaPrimes_Xr_Str.Re_DeltaPrime_Str.values)
+                            print(DeltaPrimes_Xr_Str.ImReRatio_Str.values)
+                            MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr_Str])
+                        else:
+                            print("Stride run failed, continuing without stride")
         else: #now just running rdcon on its own
             write_rdcon_inputs(working_dir,eq_filename,
-                    nn=i,
-                    mpsi=mpsi,
-                    etol=1e-10,
-                    mtheta=mtheta,
-                    psihigh=psilim,
-                    psilow=max(qlow_psi,1e-4),
-                    dx0=5e-4,
-                    cutoff=10, 
-                    newq0=newq0,
-                    grid_type=grid_type_diagnose,
-                    bin_delmatch='f',
-                    bal_flag='f',
-                    ode_flag='t', #true
-                    vac_flag='t', #true
-                    gal_flag='t', #true
-                    dump_MRE_data='f',
-                    gse_flag='f', #false, ran once by dcon
-                    sas_flag='f',
-                    cyl_flag='f',
-                    bin_eq_2d='f',
-                    eq_type=eq_type,
-                    **kwargs)
+                nn=i,
+                mpsi=mpsi,
+                etol=1e-10,
+                mtheta=mtheta,
+                psihigh=psilim,
+                qhigh=qlim,
+                psilow=psilow_rdcon,
+                qlow_str=qlow_str,
+                dx0=5e-4,
+                cutoff=10, 
+                newq0=newq0,
+                grid_type=grid_type_diagnose,
+                bin_delmatch='f',
+                bal_flag='f',
+                ode_flag='f', #false since ran dcon above for this nn
+                vac_flag='t', #false since ran dcon above for this nn
+                gal_flag='t', #true
+                dump_MRE_data='f',
+                gse_flag='f', #false, ran once by dcon
+                sas_flag='f',
+                cyl_flag='f',
+                bin_eq_2d='f',
+                eq_type=eq_type,
+                run_stride=run_stride,
+                sing_start=sing_start,
+                nx=nx,
+                regrid_flag=RDCONregrid_flag,
+                jac_type=jac_type, 
+                gal_xmin_flag=gal_xmin_flag,  
+                **kwargs)
             os.chdir(working_dir)
             rdcon_run = subprocess.call(working_dir+'/rdcon')
             if rdcon_run==0:
@@ -450,6 +518,15 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
                     ns_rdcon_ran.append(i)
                     DeltaPrimes_Xr = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime.csv',dtype={'m': 'int', 'n': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
                     MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr])
+                    print(DeltaPrimes_Xr.Re_DeltaPrime.values)
+                    print(DeltaPrimes_Xr.ImReRatio.values)
+            if run_stride:
+                stride_run = subprocess.run(working_dir+"/stride")
+                if stride_run.returncode==0:
+                    DeltaPrimes_Xr_Str = pd.read_csv(working_dir+'/Single_Helicity_DeltaPrime_S.csv',dtype={'m': 'int'}).to_xarray().drop_vars(names=['psifac','n']).set_index(index="m").rename({'index': 'm'})
+                    MRE_data_Xr=xr.merge([MRE_data_Xr,DeltaPrimes_Xr_Str])
+                else:
+                    print("Stride run failed, continuing without stride")
             
         if len(ns_dcon_ran)>0 and ns_dcon_ran[-1]==i:
             MRE_combined_vec.append(MRE_data_Xr.assign(n=i).set_coords('n'))
@@ -471,7 +548,8 @@ def run_DCON_on_equilibrium2(eq_filename,newq0=0,qlow=1.015,gse_err_logtol=-1.5,
     equil_dat_xr=equil_dat_xr.assign(ns_dcon_ran=ns_dcon_ran,ns_rdcon_ran=ns_rdcon_ran)
     equil_dat_xr=equil_dat_xr.assign(dcon_nzero=equil_dat_xr["ns_dcon_ran"]*0+dcon_nzeros,dW_total=equil_dat_xr["ns_dcon_ran"]*0+dW_totals)
     equil_dat_xr=equil_dat_xr.merge(prof_dat_xr)
-    equil_dat_xr=equil_dat_xr.merge(edge_dat_xr)
+    if os.path.isfile(working_dir+'/dW_edge.csv'):
+        equil_dat_xr=equil_dat_xr.merge(edge_dat_xr)
     equil_dat_xr=equil_dat_xr.merge(gse_dat_xr)
     if len(MRE_combined_vec)>0:
         equil_dat_xr=equil_dat_xr.merge(MRE_xr)
@@ -648,7 +726,7 @@ def write_equil_in(working_dir,eq_filename,write_equil_filename='/equil.in',
     f.close()
     return
 
-def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',write_rdcon_filename='/rdcon.in',
+def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',write_rdcon_filename='/rdcon.in',run_stride=True,
             ##GAL_INPUT
             nx=256,               # The number of elements in each interval between two singular surfaces
             pfac=0.001,           # Packing ratio near the singular surface
@@ -682,6 +760,8 @@ def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',
             sas_flag='f',         # Safety factor (q) limit determined as q_ir+dmlim where q_ir is the equil outermost rational
             dmlim=0.2,            # See sas_flag
             sing_start=0,         # Start integration at the sing_start'th rational from the axis (psilow)
+            qlow_str=0.0,             # Lower bound of q for the Galerkin method (STRIDE ONLY)
+            qhigh=1e3,            # Upper bound of q for the Galerkin method (STRIDE ONLY)
 
             nn=1,                 # Toroidal mode number
             delta_mlow=8,         # Expands lower bound of Fourier harmonics
@@ -690,17 +770,18 @@ def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',
             mthvac=960,           # Number of points used in splines over poloidal angle at plasma-vacuum interface. Overrides vac.in mth.
             thmax0=1,             # Linear multiplier on the automatic choice of theta integration bounds for high-n ideal ballooning stability computation (strictly, -inf to -inf)
 
-            tol_nr=1e-6,          # Relative tolerance of dynamic integration steps away from rationals
-            tol_r=1e-7,           # Relative tolerance of dynamic integration steps near rationals
+            tol_nr=1e-11,          # Relative tolerance of dynamic integration steps away from rationals
+            tol_r=1e-11,           # Relative tolerance of dynamic integration steps near rationals
             crossover=1e-2,       # Fractional distance from rational q at which tolerance is switched to tol_r
             singfac_min=1e-4,     # Fractional distance from rational q at which ideal jump condition is enforced
             ucrit=1e3,            # Maximum fraction of solutions allowed before re-normalized
 
             cyl_flag='f',           # Make delta_mlow and delta_mhigh set the actual m truncation bounds. Default is to expand (n*qmin-4, n*qmax).
 
-            sing1_flag='f',         # Special power series treatment
-            sing_order=6,         # The highest order of power series to be retained
-            sing_order_ceiling='t', # Auto detect the minium order to be retained in power series
+            sing1_flag='t',        # Special power series treatment
+            gal_xmin_flag='t',    # Special power series treatment for Galerkin method
+            sing_order=20,         # The highest order of power series to be retained
+            sing_order_ceiling='f', # Auto detect the minium order to be retained in power series...
 
             regrid_flag='f',        # Redo the grid generation for galerkin method
 
@@ -722,9 +803,42 @@ def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',
             #UA_DIAGNOSE_LIST
             flag='f',
             phase='t',
+            eq_type="""'efit_tokamaker'""", #Type of the input 2D equilibrium file. Accepts efit, chease, fluxgrid, transp, jsolver, lar, sol, etc.
+            
+            #STRIDE_CONTROL
+            use_classic_splines='f', # Use a classical cubic spline instead of tri-diagonal solution for splines with extrapolation boundary conditions
+            use_notaknot_splines='f', # Use not-a-knot boundary conditions for splines with extrapolation boundary conditions
+
+            #STRIDE_PARAMS
+            nThreads=32,                         # Number of threads used to calculate intervals in parallel
+            fourfit_metric_parallel='f',         # Compute equilibrium metric tensor components in parallel
+            vac_parallel='t',                    # Doubles the number of main level threads, creating more threads than processors
+
+            nIntervalsTot=33,                    # Number of radial intervals calculated in separately and recombined at end
+            grid_packing="""'singularities'""",  # Choose from "singularities" and "naive"
+            axis_mid_pt_skew=12.0,               # Skews the distribution of intervals between psilow and psihigh
+            asymp_at_sing='t',                   # Use asymptotic expansions at singular surfaces
+            kill_big_soln_for_ideal_dW='f',      # Explicitly remove the big solution
+
+            calc_delta_prime='t',                # When false, sing_order=2 is better for speed, (with less accuracy).
+            calc_dp_with_vac='t',                # When vac_flag='t', this will use vacuum edge conditions to calculate delta prime.
+            big_soln_err_tol=1e-7,               # Threshold error for correct solution to the delta prime bvp.
+
+            integrate_riccati='f',               # Use Riccati integration for dW. Cannot calculate delta_prime.
+            riccati_bounce='t',                  # Toggle integration mode to control growth of matrix
+            riccati_match_hamiltonian_evals='f', #
+            verbose_riccati_output='t',          # Creates peig and Psize output files
+            ric_dt=1e-8,                         # Initial step size of Riccati integration
+            ric_tol=1e-6,                        # Relative tolerance of Riccati integration
+
+            verbose_performance_output='t',      # Print detailed timing information to terminal
+            sing_start_str=0,            # Start integration at the sing_start'th rational from the axis (psilow). Different from rdcon sing_start since stride finds q_low searching from outside in
             **kwargs):
+
+    if True:
+        print('printing eq_type=',eq_type)
     
-    write_equil_in(working_dir,eq_filename,write_equil_filename=write_equil_filename,**kwargs)
+    write_equil_in(working_dir,eq_filename,write_equil_filename=write_equil_filename,eq_type=eq_type,**kwargs)
     
     f = open(working_dir+write_rdcon_filename, 'w')
 
@@ -739,6 +853,8 @@ def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',
     f.write('    cutoff='+str(cutoff)+'\n')  #The number of elements include the large solution as the driving term
     f.write('    solver='+solver+'\n') #LU factorization of solving Galerkinn matrix
     f.write('    nq='+str(nq)+'\n')  #The number of Gaussian points in each Galerkin element
+    f.write('    gal_xmin_flag='+gal_xmin_flag   +'\n') #Flag for automatically setting width of resonant element based on power series convergence
+
     f.write('/'+'\n')
     f.write('&GAL_OUTPUT'+'\n')
     f.write('    interp_np='+str(interp_np)+'\n') #The number of interpration points for outputting Galerkin solution
@@ -779,6 +895,8 @@ def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',
 
     f.write('    cyl_flag='+cyl_flag +'\n') #Make delta_mlow and delta_mhigh set the actual m truncation bounds. Default is to expand (n*qmin-4, n*qmax).
 
+    if gal_xmin_flag=='t':
+        sing1_flag='t' #This is necessary to use gal_xmin_flag
     f.write('    sing1_flag='+sing1_flag   +'\n') #Special power series treatment
     f.write('    sing_order='+str(sing_order)   +'\n') #The highest order of power series to be retained
     f.write('    sing_order_ceiling='+sing_order_ceiling +'\n') # Auto detect the minium order to be retained in power series
@@ -809,6 +927,94 @@ def write_rdcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',
 
 
     f.close()
+
+    if run_stride:
+        if sing1_flag=='t':
+            #print a warning if sing1_flag is set, since this is not supported in STRIDE
+            print("Warning: sing1_flag is set to true, but STRIDE does not support this option. (idk what it does, but it is not supported in STRIDE)")
+        if sing_order_ceiling=='t':
+            print("Warning: sing_order_ceiling is set to true, but STRIDE does not support this option. Consider manually setting sing_order to a value that works for your case.")
+        if gal_xmin_flag=='t':
+            print("Warning: gal_xmin_flag is set to true, but STRIDE does not support this option. There might be a discrepancy between the point of asymptotic matching between the two codes.")   
+
+        f = open(working_dir+'/stride.in', 'w')
+
+        f.write('&stride_control'+'\n')
+        f.write('    bal_flag='+bal_flag +'\n') #Ideal MHD ballooning criterion for short wavelengths
+        f.write('    mat_flag='+mat_flag +'\n') #Construct coefficient matrices for diagnostic purposes
+        f.write('    ode_flag=t' +'\n') #Integrate ODE's for determining stability of internal long-wavelength mode (must be true for GPEC)
+        f.write('    vac_flag='+vac_flag +'\n') #Compute plasma, vacuum, and total energies for free-boundary modes
+        f.write('    mer_flag='+gal_flag +'\n') #Evaluate the Mercier criterian
+
+        f.write('    sas_flag='+sas_flag +'\n') #Safety factor (q) limit determined as q_ir+dmlim where q_ir is the equil outermost rational
+        f.write('    dmlim='+str(dmlim)  +'\n') #See sas_flag
+        f.write('    qlow='+str(qlow_str)  +'\n') #Integration initiated at q determined by minimum of qlow and q0 from equil
+        f.write('    qhigh='+str(qhigh) +'\n') #Integration terminated at q limit determined by minimum of qhigh and qa from equil
+        f.write('    sing_start='+str(sing_start_str)   +'\n') #Start integration at the sing_start'th rational from the axis (psilow)
+
+        f.write('    nn='+str(nn)   +'\n') #Toroidal mode number
+        f.write('    delta_mlow='+str(delta_mlow)   +'\n') #Expands lower bound of Fourier harmonics
+        f.write('    delta_mhigh='+str(delta_mhigh)  +'\n') #Expands upper bound of  Fourier harmonics
+        f.write('    delta_mband='+str(delta_mband)  +'\n') #Integration keeps only this wide a band of solutions along the diagonal in m,m'
+        f.write('    mthvac='+str(mthvac) +'\n') #Number of points used in splines over poloidal angle at plasma-vacuum interface. Overrides vac.in mth.
+        f.write('    thmax0='+str(thmax0)   +'\n') #Linear multiplier on the automatic choice of theta integration bounds for high-n ideal ballooning stability computation (strictly, -inf to -inf)
+
+        f.write('    tol_nr='+str(tol_nr)+'\n') #Relative tolerance of dynamic integration steps away from rationals
+        f.write('    tol_r='+str(tol_r) +'\n') #Relative tolerance of dynamic integration steps near rationals
+        f.write('    crossover='+str(crossover) +'\n') #Fractional distance from rational q at which tolerance is switched to tol_r
+        f.write('    singfac_min='+str(singfac_min)  +'\n') # Fractional distance from rational q at which ideal jump condition is enforced
+        f.write('    ucrit='+str(ucrit)  +'\n') #Maximum fraction of solutions allowed before re-normalized
+        f.write('    sing_order='+str(sing_order)   +'\n') #The highest order of power series to be retained
+
+        f.write('    cyl_flag='+cyl_flag +'\n') #Make delta_mlow and delta_mhigh set the actual m truncation bounds. Default is to expand (n*qmin-4, n*qmax).
+
+        f.write('    use_classic_splines='+use_classic_splines +'\n') # Use a classical cubic spline instead of tri-diagonal solution for splines with extrapolation boundary conditions
+        f.write('    use_notaknot_splines='+use_notaknot_splines +'\n') # Use not-a-knot boundary instead of either "extrap" spline extrapolation
+        f.write('/'+'\n')
+
+        f.write('&stride_output'+'\n')
+        f.write('    crit_break='+crit_break  +'\n') #Color of the crit curve changes when crossing a singular surface
+
+        f.write('    ahb_flag='+ahb_flag  +'\n') #Output normal magnetic field eigenvalues and eigenfunctons at plasma-vacuum interface (must be false for GPEC)
+        f.write('    msol_ahb='+str(msol_ahb)   +'\n') #Number of eigenfunctions output by ahb_flag='t ?
+        f.write('    mthsurf0='+str(mthsurf0)  +'\n') #Linear multiplier on number of boundary points used to display surface eigenfunctions for ahgb_flag='t
+
+        f.write('    bin_euler='+bin_euler  +'\n') #Output M psi-by-M euler-lagrange solutions to binary file euler.bin
+        f.write('    euler_stride='+str(euler_stride)  +'\n') #Output only every euler_stride'th psi step to binary file
+
+        f.write('    out_bal1='+out_bal1  +'\n') #Ascii output for bal_flag poloidal functions
+        f.write('    bin_bal1='+bin_bal1  +'\n') #Binary output for bal_flag poloidal functions
+        f.write('    out_bal2='+out_bal2  +'\n') #Ascii output for bal_flag functions
+        f.write('    bin_bal2='+bin_bal2  +'\n') #Binary output for bal_flag functions
+
+        f.write("""    netcdf_out=f""" +'\n') #Replicate ascii stride.out and delta_prime.out information in a netcdf file
+        f.write('/'+'\n')
+
+        f.write('&stride_params'+'\n')
+        f.write('    nThreads='+str(nThreads) +'\n')
+        f.write('    fourfit_metric_parallel='+fourfit_metric_parallel +'\n')
+        f.write('    vac_parallel='+vac_parallel +'\n')
+        f.write('    nIntervalsTot='+str(nIntervalsTot) +'\n')
+        f.write('    grid_packing='+grid_packing +'\n')
+        f.write('    axis_mid_pt_skew='+str(axis_mid_pt_skew) +'\n')
+        f.write('    asymp_at_sing='+asymp_at_sing +'\n')
+        f.write('    kill_big_soln_for_ideal_dW='+kill_big_soln_for_ideal_dW +'\n')
+        f.write('    calc_delta_prime='+calc_delta_prime +'\n')
+        f.write('    calc_dp_with_vac='+calc_dp_with_vac +'\n')
+        f.write('    big_soln_err_tol='+str(big_soln_err_tol) +'\n')
+        f.write('    integrate_riccati='+integrate_riccati +'\n')
+        f.write('    riccati_bounce='+riccati_bounce +'\n')
+        f.write('    riccati_match_hamiltonian_evals='+riccati_match_hamiltonian_evals +'\n')
+        f.write('    verbose_riccati_output='+verbose_riccati_output +'\n')
+        f.write('    ric_dt='+str(ric_dt) +'\n')
+        f.write('    ric_tol='+str(ric_tol) +'\n')
+
+        f.write('    verbose_performance_output='+verbose_performance_output +'\n')
+        f.write('/'+'\n')
+
+
+        f.close()
+
     return
 
 def write_dcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',write_dcon_filename='/dcon.in',
@@ -826,7 +1032,7 @@ def write_dcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',w
 	    qlow=0,     # 1.015 Integration initiated at q determined by minimum of qlow and q0 from equil
         qhigh=1e3 ,     # Integration terminated at q limit determined by minimum of qhigh and qa from equil
         sing_start=0,   # Start integration at the sing_start'th rational from the axis (psilow)
-        reform_eq_with_psilim='f',#Reforms equilibrium splines between psilow and psilim determined by psihigh/sas_flag/qhigh/peak_flag
+        reform_eq_with_psilim='t',#Reforms equilibrium splines between psilow and psilim determined by psihigh/sas_flag/qhigh/peak_flag
         gse_err_logtol=-1,#Sets psihigh to the largest psifac grid point such that relative Grad-Shafranov error remains less than 10^gse_err_logtol (set to 1 to turn off, otherwise takes values (-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0))
 
         nn=1,           # Toroidal mode number
@@ -848,8 +1054,8 @@ def write_dcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',w
         ion_flag ='t',  # Include ion dW_k when kin_flag is true (summed with electron contribution if electron_flag true)
         electron_flag ='f',# Include electron dW_k when kin_flag is true (summed with ion contribution if ion_flag true)
 
-        tol_nr=1e-6 ,   # Relative tolerance of dynamic integration steps away from rationals
-        tol_r=1e-7,     # Relative tolerance of dynamic integration steps near rationals
+        tol_nr=1e-10 ,   # Relative tolerance of dynamic integration steps away from rationals
+        tol_r=1e-10,     # Relative tolerance of dynamic integration steps near rationals
         crossover=1e-2  ,# Fractional distance from rational q at which tolerance is switched to tol_r
         singfac_min=1e-4,# Fractional distance from rational q at which ideal jump condition is enforced
         ucrit=1e4,     # Maximum fraction of solutions allowed before re-normalized
@@ -874,9 +1080,13 @@ def write_dcon_inputs(working_dir,eq_filename,write_equil_filename='/equil.in',w
         bin_bal2='f',   # Binary output for bal_flag functions
 
         #netcdf_out='t',  # Replicate ascii dcon.out information in a netcdf file
+        eq_type="""'efit_tokamaker'""", #Type of the input 2D equilibrium file. Accepts efit, chease, fluxgrid, transp, jsolver, lar, sol, etc.
         **kwargs):
     
-    write_equil_in(working_dir,eq_filename,write_equil_filename=write_equil_filename,**kwargs)
+    if True:
+        print('printing eq_type=',eq_type)
+    
+    write_equil_in(working_dir,eq_filename,write_equil_filename=write_equil_filename,eq_type=eq_type,**kwargs)
 
     f = open(working_dir+write_dcon_filename, 'w')
 
